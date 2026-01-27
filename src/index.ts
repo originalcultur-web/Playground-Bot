@@ -28,7 +28,9 @@ const leaderboardCache = new Map<string, { data: any; timestamp: number }>();
 
 async function sendMessage(message: Message, content: string) {
   try {
-    await message.channel.send(content);
+    if ('send' in message.channel && typeof message.channel.send === 'function') {
+      await message.channel.send(content);
+    }
   } catch (e) {
     console.error("Failed to send message:", e);
   }
