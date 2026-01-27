@@ -370,13 +370,7 @@ async function handleGameCommand(message: Message, gameType: string) {
 }
 
 async function handleAccept(message: Message) {
-  const challenges = await storage.getChallenge(message.author.id, "", "");
-  
-  const allChallenges: any[] = [];
-  for (const gameType of ["connect4", "tictactoe", "wordduel", "chess"]) {
-    const result = await storage.getChallenge(message.author.id, "", gameType);
-    if (result) allChallenges.push(result);
-  }
+  const allChallenges = await storage.getAllChallengesForUser(message.author.id);
   
   if (allChallenges.length === 0) {
     await sendMessage(message, "You have no pending challenges.");
@@ -386,6 +380,7 @@ async function handleAccept(message: Message) {
   const challenge = allChallenges[0];
   await storage.removeChallenge(challenge.id);
   
+  await storage.getOrCreatePlayer(message.author.id, message.author.username, message.author.displayName);
   await startPvPGame(message, challenge.gameType, challenge.challengerId);
 }
 

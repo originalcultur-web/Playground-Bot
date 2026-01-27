@@ -257,13 +257,19 @@ export async function createChallenge(challengerId: string, challengedId: string
   await db.insert(pendingChallenges).values({ challengerId, challengedId, gameType, channelId });
 }
 
-export async function getChallenge(challengedId: string, challengerId: string, gameType: string) {
+export async function getChallenge(challengedId: string, challengerId?: string, gameType?: string) {
+  const conditions = [eq(pendingChallenges.challengedId, challengedId)];
+  if (challengerId) conditions.push(eq(pendingChallenges.challengerId, challengerId));
+  if (gameType) conditions.push(eq(pendingChallenges.gameType, gameType));
+  
   return db.query.pendingChallenges.findFirst({
-    where: and(
-      eq(pendingChallenges.challengedId, challengedId),
-      eq(pendingChallenges.challengerId, challengerId),
-      eq(pendingChallenges.gameType, gameType)
-    ),
+    where: and(...conditions),
+  });
+}
+
+export async function getAllChallengesForUser(challengedId: string) {
+  return db.query.pendingChallenges.findMany({
+    where: eq(pendingChallenges.challengedId, challengedId),
   });
 }
 
