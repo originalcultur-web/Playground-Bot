@@ -370,7 +370,8 @@ async function handleGameCommand(message: Message, gameType: string) {
     }
     
     await storage.createChallenge(playerId, challenged.id, gameType, message.channel.id);
-    await message.channel.send(`<@${challenged.id}>, you've been challenged to **${gameType.toUpperCase()}** by <@${playerId}>!\nType \`,accept\` to play.`);
+    const challengerName = await getPlayerName(playerId);
+    await message.channel.send(`**${challenged.displayName || challenged.username}**, you've been challenged to **${gameType.toUpperCase()}** by **${challengerName}**!\nType \`,accept\` to play.`);
     return;
   }
   
@@ -1075,7 +1076,9 @@ function startGameTimer(gameId: string, channel: TextChannel) {
       await storage.recordGameResult(opponentId, game.gameType, "win");
       await storage.awardWinCoins(opponentId);
       
-      await channel.send(`⏰ <@${currentPlayerId}> timed out. <@${opponentId}> wins!`);
+      const timedOutName = await getPlayerName(currentPlayerId);
+      const winnerName = await getPlayerName(opponentId);
+      await channel.send(`⏰ **${timedOutName}** timed out. **${winnerName}** wins!`);
     }
     
     await storage.endGame(gameId);
