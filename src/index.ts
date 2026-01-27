@@ -1,5 +1,13 @@
 import "dotenv/config";
-import { Client, GatewayIntentBits, Message, Partials } from "discord.js";
+import { 
+  Client, 
+  GatewayIntentBits, 
+  Message, 
+  Partials, 
+  ButtonInteraction,
+  Events,
+  TextChannel
+} from "discord.js";
 import * as storage from "#server/storage.js";
 import * as connect4 from "./games/connect4.js";
 import * as tictactoe from "./games/tictactoe.js";
@@ -7,9 +15,9 @@ import * as wordduel from "./games/wordduel.js";
 import * as chess from "./games/chess.js";
 import * as minesweeper from "./games/minesweeper.js";
 import * as wordle from "./games/wordle.js";
+import * as ui from "./ui/gameComponents.js";
 
 const PREFIX = ",";
-const TURN_TIMEOUT = 30000;
 const AFK_TIMEOUT = 60000;
 
 const client = new Client({
@@ -25,46 +33,39 @@ const client = new Client({
 const matchmakingTimers = new Map<string, NodeJS.Timeout>();
 const gameTimers = new Map<string, NodeJS.Timeout>();
 const leaderboardCache = new Map<string, { data: any; timestamp: number }>();
+const gameMessages = new Map<string, string>();
 
-async function sendMessage(message: Message, content: string) {
-  try {
-    if ('send' in message.channel && typeof message.channel.send === 'function') {
-      await message.channel.send(content);
-    }
-  } catch (e) {
-    console.error("Failed to send message:", e);
-  }
+async function getPlayerName(discordId: string): Promise<string> {
+  const player = await storage.getPlayer(discordId);
+  return player?.displayName || player?.username || "Unknown";
 }
 
 async function handleHelp(message: Message) {
   const help = `**PLAYGROUND - Commands**
 
 **Games:**
-,connect4 - Play Connect 4 (queue or @user)
-,tictactoe - Play Tic Tac Toe (queue or @user)
-,wordduel - Play Word Duel (queue or @user)
-,chess - Play Chess (queue or @user)
-,minesweeper - Play Minesweeper (solo)
-,wordle - Play Wordle (solo)
+\`,connect4\` - Play Connect 4 (queue or @user)
+\`,tictactoe\` - Play Tic Tac Toe (queue or @user)
+\`,wordduel\` - Play Word Duel (queue or @user)
+\`,chess\` - Play Chess (queue or @user)
+\`,minesweeper\` - Play Minesweeper (solo)
+\`,wordle\` - Play Wordle (solo)
 
 **During Games:**
-,quit - Forfeit current game
-,move <col/pos> - Make a move
+\`,quit\` - Forfeit current game
 
 **Profile & Stats:**
-,profile - View your profile
-,profile @user - View someone's profile
-,leaderboard <game> - View leaderboard
+\`,profile\` - View your profile
+\`,leaderboard <game>\` - View leaderboard
 
 **Shop & Inventory:**
-,shop - Browse the shop
-,buy <number> - Buy an item
-,inventory - View your inventory
-,equip <number> - Equip an item
-,unequip <type> - Unequip an item
+\`,shop\` - Browse the shop
+\`,buy <number>\` - Buy an item
+\`,inventory\` - View your inventory
+\`,equip <number>\` - Equip an item
 
-,accept - Accept a challenge`;
-  await sendMessage(message, help);
+\`,accept\` - Accept a challenge`;
+  await message.channel.send(help);
 }
 
 async function handleProfile(message: Message, args: string[]) {
@@ -79,13 +80,12 @@ async function handleProfile(message: Message, args: string[]) {
   
   const player = await storage.getPlayer(targetId);
   if (!player) {
-    await sendMessage(message, `${targetName} hasn't played any games yet.`);
+    await message.channel.send(`${targetName} hasn't played any games yet.`);
     return;
   }
   
   let badge = "";
   let title = "";
-  let frame = "";
   
   if (player.equippedBadge) {
     const item = await storage.getShopItem(player.equippedBadge);
@@ -95,12 +95,8 @@ async function handleProfile(message: Message, args: string[]) {
     const item = await storage.getShopItem(player.equippedTitle);
     if (item) title = ` [${item.name}]`;
   }
-  if (player.equippedFrame) {
-    const item = await storage.getShopItem(player.equippedFrame);
-    if (item) frame = item.emoji;
-  }
   
-  let profile = `${frame}**${player.displayName || player.username}**${title} ${badge}
+  let profile = `${badge}**${player.displayName || player.username}**${title}
 @${player.username}
 
 Total Wins: ${player.totalWins}
@@ -110,7 +106,7 @@ Total Losses: ${player.totalLosses}`;
     profile += `\nCoins: ${player.coins}`;
   }
   
-  await sendMessage(message, profile);
+  await message.channel.send(profile);
 }
 
 async function handleLeaderboard(message: Message, args: string[]) {
@@ -118,14 +114,14 @@ async function handleLeaderboard(message: Message, args: string[]) {
   const validGames = ["connect4", "tictactoe", "chess", "wordduel", "minesweeper", "wordle"];
   
   if (!game || !validGames.includes(game)) {
-    await sendMessage(message, `Usage: ,leaderboard <game>\nGames: ${validGames.join(", ")}`);
+    await message.channel.send(`Usage: ,leaderboard <game>\nGames: ${validGames.join(", ")}`);
     return;
   }
   
   const cacheKey = game;
   const cached = leaderboardCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 300000) {
-    await sendMessage(message, cached.data);
+    await message.channel.send(cached.data);
     return;
   }
   
@@ -133,7 +129,7 @@ async function handleLeaderboard(message: Message, args: string[]) {
   const playerRank = await storage.getPlayerRank(message.author.id, game);
   const playerStats = await storage.getOrCreateGameStats(message.author.id, game);
   
-  let display = `${game.toUpperCase()} - LEADERBOARD\n\n`;
+  let display = `**${game.toUpperCase()} - LEADERBOARD**\n\n`;
   
   if (leaders.length === 0) {
     display += "No players with 20+ games yet.\n";
@@ -142,21 +138,21 @@ async function handleLeaderboard(message: Message, args: string[]) {
       const stat = leaders[i];
       const player = await storage.getPlayer(stat.discordId);
       const winRate = stat.winRate.toFixed(0);
-      display += `${i + 1}. ${player?.displayName || "Unknown"} (@${player?.username || "unknown"})\n`;
-      display += `   Wins: ${stat.wins} Losses: ${stat.losses} Win%: ${winRate}\n\n`;
+      display += `${i + 1}. ${player?.displayName || "Unknown"}\n`;
+      display += `   Wins: ${stat.wins} | Losses: ${stat.losses} | Win%: ${winRate}\n\n`;
     }
   }
   
   const totalGames = playerStats.wins + playerStats.losses;
   if (totalGames >= 20) {
-    display += `\nYOUR RANK: ${playerRank}\n`;
+    display += `\n**YOUR RANK:** ${playerRank}\n`;
   } else {
     display += `\nPlay ${20 - totalGames} more games to appear on leaderboard.\n`;
   }
-  display += `Wins: ${playerStats.wins} Losses: ${playerStats.losses} Win%: ${playerStats.winRate.toFixed(0)}`;
+  display += `Wins: ${playerStats.wins} | Losses: ${playerStats.losses} | Win%: ${playerStats.winRate.toFixed(0)}`;
   
   leaderboardCache.set(cacheKey, { data: display, timestamp: Date.now() });
-  await sendMessage(message, display);
+  await message.channel.send(display);
 }
 
 async function handleShop(message: Message, args: string[]) {
@@ -164,7 +160,7 @@ async function handleShop(message: Message, args: string[]) {
   const items = await storage.getShopItems(category);
   
   if (items.length === 0) {
-    await sendMessage(message, "No items found. Categories: badges, titles, frames, connect4, chess");
+    await message.channel.send("No items found. Categories: badges, titles, frames, connect4, chess");
     return;
   }
   
@@ -174,21 +170,21 @@ async function handleShop(message: Message, args: string[]) {
     display += `${i + 1}. ${item.emoji} ${item.name} - ${item.price} coins\n`;
     if (item.description) display += `   ${item.description}\n`;
   }
-  display += "\nUse ,buy <number> to purchase";
+  display += "\nUse `,buy <number>` to purchase";
   
-  await sendMessage(message, display);
+  await message.channel.send(display);
 }
 
 async function handleBuy(message: Message, args: string[]) {
   const itemNumber = parseInt(args[0]);
   if (isNaN(itemNumber) || itemNumber < 1) {
-    await sendMessage(message, "Usage: ,buy <number>");
+    await message.channel.send("Usage: ,buy <number>");
     return;
   }
   
   const items = await storage.getShopItems();
   if (itemNumber > items.length) {
-    await sendMessage(message, "Invalid item number.");
+    await message.channel.send("Invalid item number.");
     return;
   }
   
@@ -196,9 +192,9 @@ async function handleBuy(message: Message, args: string[]) {
   const result = await storage.purchaseItem(message.author.id, item.id);
   
   if (result.success) {
-    await sendMessage(message, `Purchased ${item.emoji} ${item.name}! It has been equipped.`);
+    await message.channel.send(`Purchased ${item.emoji} ${item.name}! It has been equipped.`);
   } else {
-    await sendMessage(message, result.error || "Purchase failed.");
+    await message.channel.send(result.error || "Purchase failed.");
   }
 }
 
@@ -206,7 +202,7 @@ async function handleInventory(message: Message) {
   const inventory = await storage.getUserInventory(message.author.id);
   
   if (inventory.length === 0) {
-    await sendMessage(message, "Your inventory is empty. Visit ,shop to browse items!");
+    await message.channel.send("Your inventory is empty. Visit ,shop to browse items!");
     return;
   }
   
@@ -217,32 +213,32 @@ async function handleInventory(message: Message) {
       display += `${i + 1}. ${inv.item.emoji} ${inv.item.name} (${inv.item.itemType})\n`;
     }
   }
-  display += "\nUse ,equip <number> to equip an item";
+  display += "\nUse `,equip <number>` to equip an item";
   
-  await sendMessage(message, display);
+  await message.channel.send(display);
 }
 
 async function handleEquip(message: Message, args: string[]) {
   const itemNumber = parseInt(args[0]);
   if (isNaN(itemNumber) || itemNumber < 1) {
-    await sendMessage(message, "Usage: ,equip <number>");
+    await message.channel.send("Usage: ,equip <number>");
     return;
   }
   
   const inventory = await storage.getUserInventory(message.author.id);
   if (itemNumber > inventory.length) {
-    await sendMessage(message, "Invalid item number.");
+    await message.channel.send("Invalid item number.");
     return;
   }
   
   const inv = inventory[itemNumber - 1];
   if (!inv.item) {
-    await sendMessage(message, "Item not found.");
+    await message.channel.send("Item not found.");
     return;
   }
   
   await storage.equipItem(message.author.id, inv.itemId);
-  await sendMessage(message, `Equipped ${inv.item.emoji} ${inv.item.name}!`);
+  await message.channel.send(`Equipped ${inv.item.emoji} ${inv.item.name}!`);
 }
 
 async function handleUnequip(message: Message, args: string[]) {
@@ -250,60 +246,108 @@ async function handleUnequip(message: Message, args: string[]) {
   const validTypes = ["badge", "title", "frame", "skin"];
   
   if (!type || !validTypes.includes(type)) {
-    await sendMessage(message, `Usage: ,unequip <type>\nTypes: ${validTypes.join(", ")}`);
+    await message.channel.send(`Usage: ,unequip <type>\nTypes: ${validTypes.join(", ")}`);
     return;
   }
   
   await storage.unequipItem(message.author.id, type, args[1]);
-  await sendMessage(message, `Unequipped ${type}.`);
+  await message.channel.send(`Unequipped ${type}.`);
 }
 
-async function startPvPGame(message: Message, gameType: string, player2Id: string) {
-  await storage.getOrCreatePlayer(message.author.id, message.author.username, message.author.displayName);
+async function startPvPGame(channel: TextChannel, gameType: string, player1Id: string, player2Id: string) {
+  await storage.getOrCreatePlayer(player1Id, player1Id);
+  await storage.getOrCreatePlayer(player2Id, player2Id);
   
   let state: any;
   switch (gameType) {
     case "connect4":
-      state = connect4.createGameState(message.author.id, player2Id);
+      state = connect4.createGameState(player1Id, player2Id);
       break;
     case "tictactoe":
-      state = tictactoe.createGameState(message.author.id, player2Id);
+      state = tictactoe.createGameState(player1Id, player2Id);
       break;
     case "wordduel":
-      state = wordduel.createGameState(message.author.id, player2Id);
+      state = wordduel.createGameState(player1Id, player2Id);
       break;
     case "chess":
-      state = chess.createGameState(message.author.id, player2Id);
+      state = chess.createGameState(player1Id, player2Id);
       break;
     default:
       return;
   }
   
-  const game = await storage.createActiveGame(gameType, message.author.id, message.channel.id, state, player2Id);
-  await storage.recordRecentOpponent(message.author.id, player2Id, gameType);
+  const game = await storage.createActiveGame(gameType, player1Id, channel.id, state, player2Id);
+  await storage.recordRecentOpponent(player1Id, player2Id, gameType);
   
-  let display = `**${gameType.toUpperCase()}**\n<@${message.author.id}> vs <@${player2Id}>\n\n`;
+  const player1Name = await getPlayerName(player1Id);
+  const player2Name = await getPlayerName(player2Id);
   
-  switch (gameType) {
-    case "connect4":
-      display += connect4.renderBoard(state);
-      display += `\n<@${state.player1Id}>'s turn. Type 1-7 to drop a piece.`;
-      break;
-    case "tictactoe":
-      display += tictactoe.renderBoard(state);
-      display += `\n<@${state.player1Id}>'s turn. Type 1-9 to place.`;
-      break;
-    case "wordduel":
-      display += wordduel.renderStatus(state);
-      break;
-    case "chess":
-      display += chess.renderBoard(state);
-      display += `\n<@${state.player1Id}> (White) to move.`;
-      break;
+  let sentMessage;
+  
+  if (gameType === "tictactoe") {
+    const embed = ui.createTicTacToeEmbed(state, player1Name);
+    const buttons = ui.createTicTacToeBoard(state, game.id);
+    sentMessage = await channel.send({
+      content: `🎮 <@${player1Id}> vs <@${player2Id}>`,
+      embeds: [embed],
+      components: buttons
+    });
+  } else if (gameType === "connect4") {
+    const embed = ui.createConnect4Embed(state, player1Name);
+    const buttons = ui.createConnect4Board(state, game.id);
+    sentMessage = await channel.send({
+      content: `🎮 <@${player1Id}> vs <@${player2Id}>`,
+      embeds: [embed],
+      components: buttons
+    });
+  } else if (gameType === "wordduel") {
+    const embed = ui.createWordDuelEmbed(state);
+    sentMessage = await channel.send({
+      content: `⚔️ <@${player1Id}> vs <@${player2Id}>`,
+      embeds: [embed]
+    });
+  } else if (gameType === "chess") {
+    const chessBoard = createChessDisplay(state);
+    const embed = ui.createChessEmbed(state, player1Name, chessBoard);
+    sentMessage = await channel.send({
+      content: `♟️ <@${player1Id}> (White) vs <@${player2Id}> (Black)`,
+      embeds: [embed]
+    });
   }
   
-  await sendMessage(message, display);
-  startGameTimer(game.id, message);
+  if (sentMessage) {
+    gameMessages.set(game.id, sentMessage.id);
+  }
+  
+  startGameTimer(game.id, channel);
+}
+
+function createChessDisplay(state: any): string {
+  const chessModule = chess as any;
+  const chessJs = new (require("chess.js").Chess)(state.fen);
+  const board = chessJs.board();
+  
+  const pieceMap: Record<string, string> = {
+    "wk": "♔", "wq": "♕", "wr": "♖", "wb": "♗", "wn": "♘", "wp": "♙",
+    "bk": "♚", "bq": "♛", "br": "♜", "bb": "♝", "bn": "♞", "bp": "♟",
+  };
+  
+  let display = "  a b c d e f g h\n";
+  for (let row = 0; row < 8; row++) {
+    display += `${8 - row} `;
+    for (let col = 0; col < 8; col++) {
+      const piece = board[row][col];
+      if (piece) {
+        const key = piece.color + piece.type;
+        display += pieceMap[key] + " ";
+      } else {
+        display += ". ";
+      }
+    }
+    display += `${8 - row}\n`;
+  }
+  display += "  a b c d e f g h";
+  return display;
 }
 
 async function handleGameCommand(message: Message, gameType: string) {
@@ -313,35 +357,35 @@ async function handleGameCommand(message: Message, gameType: string) {
   
   const existingGame = await storage.getActiveGame(playerId);
   if (existingGame) {
-    await sendMessage(message, "You're already in a game. Use ,quit to leave.");
+    await message.channel.send("You're already in a game. Use `,quit` to leave.");
     return;
   }
   
   if (await storage.isQueueLocked(playerId)) {
-    await sendMessage(message, "You're temporarily locked from matchmaking due to forfeits. Please wait.");
+    await message.channel.send("You're temporarily locked from matchmaking due to forfeits.");
     return;
   }
   
   if (message.mentions.users.size > 0) {
     const challenged = message.mentions.users.first()!;
     if (challenged.id === playerId) {
-      await sendMessage(message, "You can't challenge yourself!");
+      await message.channel.send("You can't challenge yourself!");
       return;
     }
     
     const challengedGame = await storage.getActiveGame(challenged.id);
     if (challengedGame) {
-      await sendMessage(message, `${challenged.username} is already in a game.`);
+      await message.channel.send(`${challenged.username} is already in a game.`);
       return;
     }
     
     await storage.createChallenge(playerId, challenged.id, gameType, message.channel.id);
-    await sendMessage(message, `<@${challenged.id}>, you've been challenged to ${gameType} by <@${playerId}>!\nType ,accept to play.`);
+    await message.channel.send(`<@${challenged.id}>, you've been challenged to **${gameType.toUpperCase()}** by <@${playerId}>!\nType \`,accept\` to play.`);
     return;
   }
   
   await storage.addToQueue(playerId, gameType, message.channel.id);
-  await sendMessage(message, `Looking for a ${gameType} opponent... (,quit to cancel)`);
+  await message.channel.send(`🔍 Looking for a **${gameType.toUpperCase()}** opponent... (type \`,quit\` to cancel)`);
   
   let attempts = 0;
   const findOpponent = async () => {
@@ -356,13 +400,14 @@ async function handleGameCommand(message: Message, gameType: string) {
       await storage.removeFromQueue(match.discordId);
       matchmakingTimers.delete(playerId);
       
-      await startPvPGame(message, gameType, match.discordId);
+      const channel = message.channel as TextChannel;
+      await startPvPGame(channel, gameType, playerId, match.discordId);
     } else if (attempts < 12) {
       matchmakingTimers.set(playerId, setTimeout(findOpponent, 5000));
     } else {
       await storage.removeFromQueue(playerId);
       matchmakingTimers.delete(playerId);
-      await sendMessage(message, "No opponent found. Try again later or challenge someone directly.");
+      await message.channel.send("No opponent found. Try again later or challenge someone directly.");
     }
   };
   
@@ -373,7 +418,7 @@ async function handleAccept(message: Message) {
   const allChallenges = await storage.getAllChallengesForUser(message.author.id);
   
   if (allChallenges.length === 0) {
-    await sendMessage(message, "You have no pending challenges.");
+    await message.channel.send("You have no pending challenges.");
     return;
   }
   
@@ -381,7 +426,9 @@ async function handleAccept(message: Message) {
   await storage.removeChallenge(challenge.id);
   
   await storage.getOrCreatePlayer(message.author.id, message.author.username, message.author.displayName);
-  await startPvPGame(message, challenge.gameType, challenge.challengerId);
+  
+  const channel = message.channel as TextChannel;
+  await startPvPGame(channel, challenge.gameType, challenge.challengerId, message.author.id);
 }
 
 async function handleSoloGame(message: Message, gameType: string) {
@@ -391,24 +438,79 @@ async function handleSoloGame(message: Message, gameType: string) {
   
   const existingGame = await storage.getActiveGame(playerId);
   if (existingGame) {
-    await sendMessage(message, "You're already in a game. Use ,quit to leave.");
+    await message.channel.send("You're already in a game. Use `,quit` to leave.");
     return;
   }
   
   let state: any;
+  let sentMessage;
+  
   if (gameType === "minesweeper") {
     state = minesweeper.createGameState(playerId);
+    state.size = 5;
+    state.mines = 5;
+    state.board = createMinesweeperBoard(5, 5);
+    state.revealed = Array(5).fill(null).map(() => Array(5).fill(false));
+    state.flagged = Array(5).fill(null).map(() => Array(5).fill(false));
+    
+    const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
+    const embed = ui.createMinesweeperEmbed(state);
+    const buttons = ui.createMinesweeperBoard(state, game.id);
+    
+    sentMessage = await message.channel.send({
+      embeds: [embed],
+      components: buttons
+    });
+    
+    if (sentMessage) {
+      gameMessages.set(game.id, sentMessage.id);
+    }
   } else if (gameType === "wordle") {
     state = wordle.createGameState(playerId);
+    const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
+    const embed = ui.createWordleEmbed(state);
+    
+    sentMessage = await message.channel.send({
+      embeds: [embed]
+    });
+    
+    if (sentMessage) {
+      gameMessages.set(game.id, sentMessage.id);
+    }
+  }
+}
+
+function createMinesweeperBoard(size: number, mines: number): number[][] {
+  const board = Array(size).fill(null).map(() => Array(size).fill(0));
+  
+  let minesPlaced = 0;
+  while (minesPlaced < mines) {
+    const row = Math.floor(Math.random() * size);
+    const col = Math.floor(Math.random() * size);
+    if (board[row][col] !== -1) {
+      board[row][col] = -1;
+      minesPlaced++;
+    }
   }
   
-  const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
-  
-  if (gameType === "minesweeper") {
-    await sendMessage(message, minesweeper.renderBoard(state));
-  } else if (gameType === "wordle") {
-    await sendMessage(message, wordle.renderBoard(state));
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      if (board[row][col] === -1) continue;
+      let count = 0;
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = row + dr;
+          const nc = col + dc;
+          if (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === -1) {
+            count++;
+          }
+        }
+      }
+      board[row][col] = count;
+    }
   }
+  
+  return board;
 }
 
 async function handleQuit(message: Message) {
@@ -419,13 +521,13 @@ async function handleQuit(message: Message) {
     clearTimeout(timer);
     matchmakingTimers.delete(playerId);
     await storage.removeFromQueue(playerId);
-    await sendMessage(message, "Left the matchmaking queue.");
+    await message.channel.send("Left the matchmaking queue.");
     return;
   }
   
   const game = await storage.getActiveGame(playerId);
   if (!game) {
-    await sendMessage(message, "You're not in a game.");
+    await message.channel.send("You're not in a game.");
     return;
   }
   
@@ -437,83 +539,45 @@ async function handleQuit(message: Message) {
     await storage.recordGameResult(opponentId, game.gameType, "win");
     await storage.awardWinCoins(opponentId);
     await storage.recordForfeit(playerId);
-    await sendMessage(message, `<@${playerId}> forfeited. <@${opponentId}> wins!`);
+    await message.channel.send(`<@${playerId}> forfeited. <@${opponentId}> wins!`);
   } else {
-    await sendMessage(message, "Game ended.");
+    await message.channel.send("Game ended.");
   }
   
+  gameMessages.delete(game.id);
   await storage.endGame(game.id);
 }
 
-async function handleGameInput(message: Message) {
-  const playerId = message.author.id;
-  const content = message.content.trim().toLowerCase();
+async function handleButtonInteraction(interaction: ButtonInteraction) {
+  const customId = interaction.customId;
+  const userId = interaction.user.id;
   
-  const game = await storage.getActiveGame(playerId);
-  if (!game) return;
-  
-  const state = game.state as any;
-  
-  if (game.gameType === "connect4") {
-    if (state.currentPlayer === 1 && playerId !== state.player1Id) return;
-    if (state.currentPlayer === 2 && playerId !== state.player2Id) return;
+  if (customId.startsWith("ttt_")) {
+    const parts = customId.split("_");
+    const gameId = parts[1];
+    const position = parseInt(parts[2]);
     
-    const col = parseInt(content) - 1;
-    if (isNaN(col) || col < 0 || col > 6) return;
-    
-    const result = connect4.dropPiece(state, col);
-    if (!result.success) {
-      await sendMessage(message, "Column is full. Choose another.");
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
       return;
     }
     
-    if (connect4.checkWin(state.board, state.currentPlayer)) {
-      const winnerId = connect4.getCurrentPlayerId(state);
-      const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
-      
-      await storage.recordGameResult(winnerId, "connect4", "win");
-      await storage.recordGameResult(loserId, "connect4", "loss");
-      await storage.awardWinCoins(winnerId);
-      
-      clearGameTimer(game.id);
-      await storage.endGame(game.id);
-      
-      let display = connect4.renderBoard(state);
-      display += `\n\n<@${winnerId}> wins!`;
-      await sendMessage(message, display);
+    const state = game.state as any;
+    const isPlayer1Turn = state.currentPlayer === 1;
+    const expectedPlayer = isPlayer1Turn ? state.player1Id : state.player2Id;
+    
+    if (userId !== expectedPlayer) {
+      await interaction.reply({ content: "It's not your turn!", ephemeral: true });
       return;
     }
     
-    if (connect4.isBoardFull(state.board)) {
-      clearGameTimer(game.id);
-      await storage.endGame(game.id);
-      
-      let display = connect4.renderBoard(state);
-      display += "\n\nIt's a draw!";
-      await sendMessage(message, display);
+    if (!tictactoe.makeMove(state, position)) {
+      await interaction.reply({ content: "Invalid move.", ephemeral: true });
       return;
     }
     
-    connect4.switchTurn(state);
-    await storage.updateGameState(game.id, state, connect4.getCurrentPlayerId(state));
-    
-    let display = connect4.renderBoard(state);
-    display += `\n<@${connect4.getCurrentPlayerId(state)}>'s turn.`;
-    await sendMessage(message, display);
-    resetGameTimer(game.id, message);
-  }
-  
-  else if (game.gameType === "tictactoe") {
-    if (state.currentPlayer === 1 && playerId !== state.player1Id) return;
-    if (state.currentPlayer === 2 && playerId !== state.player2Id) return;
-    
-    const pos = parseInt(content) - 1;
-    if (isNaN(pos) || pos < 0 || pos > 8) return;
-    
-    if (!tictactoe.makeMove(state, pos)) {
-      await sendMessage(message, "Invalid move. Choose an empty square.");
-      return;
-    }
+    const currentPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
     
     if (tictactoe.checkWin(state.board, state.currentPlayer)) {
       tictactoe.recordRoundWin(state, state.currentPlayer);
@@ -532,20 +596,29 @@ async function handleGameInput(message: Message) {
         clearGameTimer(game.id);
         await storage.endGame(game.id);
         
-        let display = tictactoe.renderBoard(state);
-        display += matchResult.winner ? `\n\n<@${winnerId}> wins the match!` : "\n\nIt's a draw!";
-        await sendMessage(message, display);
+        const winnerName = await getPlayerName(winnerId);
+        const embed = ui.createTicTacToeEmbed(state, "", true, `🏆 ${winnerName} wins the match!`);
+        const buttons = ui.createTicTacToeBoard(state, game.id, true);
+        
+        await interaction.update({
+          embeds: [embed],
+          components: buttons
+        });
         return;
       }
       
       tictactoe.resetBoard(state);
       await storage.updateGameState(game.id, state);
       
-      let display = `Round ${state.currentRound - 1} won by <@${tictactoe.getCurrentPlayerId(state)}>\n\n`;
-      display += tictactoe.renderBoard(state);
-      display += `\n<@${tictactoe.getCurrentPlayerId(state)}>'s turn.`;
-      await sendMessage(message, display);
-      resetGameTimer(game.id, message);
+      const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
+      const embed = ui.createTicTacToeEmbed(state, nextPlayerName);
+      const buttons = ui.createTicTacToeBoard(state, game.id);
+      
+      await interaction.update({
+        embeds: [embed],
+        components: buttons
+      });
+      resetGameTimer(game.id, interaction.channel as TextChannel);
       return;
     }
     
@@ -554,33 +627,246 @@ async function handleGameInput(message: Message) {
         clearGameTimer(game.id);
         await storage.endGame(game.id);
         
-        let display = tictactoe.renderBoard(state);
-        display += "\n\nMatch ended in a draw!";
-        await sendMessage(message, display);
+        const embed = ui.createTicTacToeEmbed(state, "", true, "🤝 Match ended in a draw!");
+        const buttons = ui.createTicTacToeBoard(state, game.id, true);
+        
+        await interaction.update({
+          embeds: [embed],
+          components: buttons
+        });
         return;
       }
       
       tictactoe.resetBoard(state);
       await storage.updateGameState(game.id, state);
       
-      let display = "Round draw!\n\n";
-      display += tictactoe.renderBoard(state);
-      display += `\n<@${tictactoe.getCurrentPlayerId(state)}>'s turn.`;
-      await sendMessage(message, display);
-      resetGameTimer(game.id, message);
+      const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
+      const embed = ui.createTicTacToeEmbed(state, nextPlayerName);
+      const buttons = ui.createTicTacToeBoard(state, game.id);
+      
+      await interaction.update({
+        embeds: [embed],
+        components: buttons
+      });
+      resetGameTimer(game.id, interaction.channel as TextChannel);
       return;
     }
     
     tictactoe.switchTurn(state);
     await storage.updateGameState(game.id, state, tictactoe.getCurrentPlayerId(state));
     
-    let display = tictactoe.renderBoard(state);
-    display += `\n<@${tictactoe.getCurrentPlayerId(state)}>'s turn.`;
-    await sendMessage(message, display);
-    resetGameTimer(game.id, message);
+    const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
+    const embed = ui.createTicTacToeEmbed(state, nextPlayerName);
+    const buttons = ui.createTicTacToeBoard(state, game.id);
+    
+    await interaction.update({
+      embeds: [embed],
+      components: buttons
+    });
+    resetGameTimer(game.id, interaction.channel as TextChannel);
   }
   
-  else if (game.gameType === "wordduel") {
+  else if (customId.startsWith("c4_")) {
+    const parts = customId.split("_");
+    const gameId = parts[1];
+    const col = parseInt(parts[2]);
+    
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    const state = game.state as any;
+    const expectedPlayer = state.currentPlayer === 1 ? state.player1Id : state.player2Id;
+    
+    if (userId !== expectedPlayer) {
+      await interaction.reply({ content: "It's not your turn!", ephemeral: true });
+      return;
+    }
+    
+    const result = connect4.dropPiece(state, col);
+    if (!result.success) {
+      await interaction.reply({ content: "Column is full!", ephemeral: true });
+      return;
+    }
+    
+    if (connect4.checkWin(state.board, state.currentPlayer)) {
+      const winnerId = connect4.getCurrentPlayerId(state);
+      const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
+      
+      await storage.recordGameResult(winnerId, "connect4", "win");
+      await storage.recordGameResult(loserId, "connect4", "loss");
+      await storage.awardWinCoins(winnerId);
+      
+      clearGameTimer(game.id);
+      await storage.endGame(game.id);
+      
+      const winnerName = await getPlayerName(winnerId);
+      const embed = ui.createConnect4Embed(state, "", true, `🏆 ${winnerName} wins!`);
+      const buttons = ui.createConnect4Board(state, game.id, true);
+      
+      await interaction.update({
+        embeds: [embed],
+        components: buttons
+      });
+      return;
+    }
+    
+    if (connect4.isBoardFull(state.board)) {
+      clearGameTimer(game.id);
+      await storage.endGame(game.id);
+      
+      const embed = ui.createConnect4Embed(state, "", true, "🤝 It's a draw!");
+      const buttons = ui.createConnect4Board(state, game.id, true);
+      
+      await interaction.update({
+        embeds: [embed],
+        components: buttons
+      });
+      return;
+    }
+    
+    connect4.switchTurn(state);
+    await storage.updateGameState(game.id, state, connect4.getCurrentPlayerId(state));
+    
+    const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(state));
+    const embed = ui.createConnect4Embed(state, nextPlayerName);
+    const buttons = ui.createConnect4Board(state, game.id);
+    
+    await interaction.update({
+      embeds: [embed],
+      components: buttons
+    });
+    resetGameTimer(game.id, interaction.channel as TextChannel);
+  }
+  
+  else if (customId.startsWith("ms_")) {
+    const parts = customId.split("_");
+    const gameId = parts[1];
+    const row = parseInt(parts[2]);
+    const col = parseInt(parts[3]);
+    
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    const state = game.state as any;
+    
+    if (userId !== state.playerId) {
+      await interaction.reply({ content: "This isn't your game!", ephemeral: true });
+      return;
+    }
+    
+    revealMinesweeperCell(state, row, col);
+    await storage.updateGameState(game.id, state);
+    
+    if (state.gameOver) {
+      await storage.endGame(game.id);
+    }
+    
+    const embed = ui.createMinesweeperEmbed(state, state.gameOver);
+    const buttons = ui.createMinesweeperBoard(state, game.id);
+    
+    await interaction.update({
+      embeds: [embed],
+      components: buttons
+    });
+  }
+  
+  else if (customId.startsWith("quit_")) {
+    const gameId = customId.split("_")[1];
+    const game = await storage.getActiveGameById(gameId);
+    
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    if (userId !== game.player1Id && userId !== game.player2Id) {
+      await interaction.reply({ content: "You're not in this game!", ephemeral: true });
+      return;
+    }
+    
+    clearGameTimer(game.id);
+    
+    if (game.player2Id) {
+      const opponentId = game.player1Id === userId ? game.player2Id : game.player1Id;
+      await storage.recordGameResult(userId, game.gameType, "loss");
+      await storage.recordGameResult(opponentId, game.gameType, "win");
+      await storage.awardWinCoins(opponentId);
+      await storage.recordForfeit(userId);
+      
+      await interaction.update({
+        content: `<@${userId}> forfeited. <@${opponentId}> wins!`,
+        embeds: [],
+        components: []
+      });
+    } else {
+      await interaction.update({
+        content: "Game ended.",
+        embeds: [],
+        components: []
+      });
+    }
+    
+    await storage.endGame(game.id);
+  }
+}
+
+function revealMinesweeperCell(state: any, row: number, col: number): void {
+  const size = state.size || 5;
+  if (row < 0 || row >= size || col < 0 || col >= size) return;
+  if (state.revealed[row][col] || state.flagged[row][col]) return;
+  if (state.gameOver) return;
+  
+  state.revealed[row][col] = true;
+  
+  if (state.board[row][col] === -1) {
+    state.gameOver = true;
+    state.won = false;
+    state.endTime = Date.now();
+    return;
+  }
+  
+  if (state.board[row][col] === 0) {
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        revealMinesweeperCell(state, row + dr, col + dc);
+      }
+    }
+  }
+  
+  let allRevealed = true;
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (state.board[r][c] !== -1 && !state.revealed[r][c]) {
+        allRevealed = false;
+        break;
+      }
+    }
+    if (!allRevealed) break;
+  }
+  
+  if (allRevealed) {
+    state.gameOver = true;
+    state.won = true;
+    state.endTime = Date.now();
+  }
+}
+
+async function handleTextGameInput(message: Message) {
+  const playerId = message.author.id;
+  const content = message.content.trim().toLowerCase();
+  
+  const game = await storage.getActiveGame(playerId);
+  if (!game) return;
+  
+  const state = game.state as any;
+  
+  if (game.gameType === "wordduel") {
     const result = wordduel.submitAnswer(state, playerId, content);
     
     if (result.correct && result.first) {
@@ -598,12 +884,19 @@ async function handleGameInput(message: Message) {
         
         clearGameTimer(game.id);
         await storage.endGame(game.id);
-        await sendMessage(message, wordduel.renderFinalResult(state));
+        
+        const embed = ui.createWordDuelEmbed(state, true);
+        await message.channel.send({ embeds: [embed] });
         return;
       }
       
-      await sendMessage(message, `<@${playerId}> got it! The word was: ${state.words[state.currentWordIndex - 1]}\n\n${wordduel.renderStatus(state)}`);
-      resetGameTimer(game.id, message);
+      const previousWord = state.words[state.currentWordIndex - 1];
+      const embed = ui.createWordDuelEmbed(state);
+      await message.channel.send({
+        content: `✅ <@${playerId}> got it! The word was: **${previousWord.toUpperCase()}**`,
+        embeds: [embed]
+      });
+      resetGameTimer(game.id, message.channel as TextChannel);
     }
   }
   
@@ -615,12 +908,15 @@ async function handleGameInput(message: Message) {
     const result = chess.makeMove(state, move);
     
     if (!result.success) {
-      await sendMessage(message, result.error || "Invalid move.");
+      await message.reply(result.error || "Invalid move.");
       return;
     }
     
     const status = chess.getGameStatus(state);
     await storage.updateGameState(game.id, state, chess.getCurrentPlayerId(state));
+    
+    const currentPlayerName = await getPlayerName(chess.getCurrentPlayerId(state));
+    const chessBoard = createChessDisplay(state);
     
     if (status.over) {
       if (status.winner) {
@@ -633,58 +929,19 @@ async function handleGameInput(message: Message) {
       clearGameTimer(game.id);
       await storage.endGame(game.id);
       
-      let display = chess.renderBoard(state);
-      if (status.result === "checkmate") {
-        display += `\n\nCheckmate! <@${status.winner}> wins!`;
-      } else {
-        display += `\n\nGame ended in a ${status.result}!`;
-      }
-      await sendMessage(message, display);
+      const winnerName = status.winner ? await getPlayerName(status.winner) : null;
+      const resultText = status.result === "checkmate" 
+        ? `Checkmate! ${winnerName} wins!`
+        : `Game ended in a ${status.result}!`;
+      
+      const embed = ui.createChessEmbed(state, "", chessBoard, true, resultText);
+      await message.channel.send({ embeds: [embed] });
       return;
     }
     
-    let display = chess.renderBoard(state);
-    display += `\n<@${chess.getCurrentPlayerId(state)}>'s turn.`;
-    await sendMessage(message, display);
-    resetGameTimer(game.id, message);
-  }
-  
-  else if (game.gameType === "minesweeper") {
-    if (playerId !== state.playerId) return;
-    
-    if (content.startsWith(",reveal ") || content.startsWith(",r ")) {
-      const coord = content.replace(",reveal ", "").replace(",r ", "").trim().toUpperCase();
-      const row = coord.charCodeAt(0) - 65;
-      const col = parseInt(coord.slice(1)) - 1;
-      
-      if (row >= 0 && row < 9 && col >= 0 && col < 9) {
-        minesweeper.reveal(state, row, col);
-        await storage.updateGameState(game.id, state);
-        
-        if (state.gameOver) {
-          if (state.won) {
-            const time = Math.floor((state.endTime! - state.startTime) / 1000);
-            const stats = await storage.getOrCreateGameStats(playerId, "minesweeper");
-            const extraStats = (stats.extraStats || {}) as Record<string, any>;
-            extraStats.totalSolves = (extraStats.totalSolves || 0) + 1;
-            extraStats.bestTime = Math.min(extraStats.bestTime || Infinity, time);
-          }
-          await storage.endGame(game.id);
-        }
-        
-        await sendMessage(message, minesweeper.renderBoard(state, state.gameOver && !state.won));
-      }
-    } else if (content.startsWith(",flag ") || content.startsWith(",f ")) {
-      const coord = content.replace(",flag ", "").replace(",f ", "").trim().toUpperCase();
-      const row = coord.charCodeAt(0) - 65;
-      const col = parseInt(coord.slice(1)) - 1;
-      
-      if (row >= 0 && row < 9 && col >= 0 && col < 9) {
-        minesweeper.toggleFlag(state, row, col);
-        await storage.updateGameState(game.id, state);
-        await sendMessage(message, minesweeper.renderBoard(state));
-      }
-    }
+    const embed = ui.createChessEmbed(state, currentPlayerName, chessBoard);
+    await message.channel.send({ embeds: [embed] });
+    resetGameTimer(game.id, message.channel as TextChannel);
   }
   
   else if (game.gameType === "wordle") {
@@ -697,31 +954,23 @@ async function handleGameInput(message: Message) {
         await storage.updateGameState(game.id, state);
         
         if (state.gameOver) {
-          if (state.won) {
-            const stats = await storage.getOrCreateGameStats(playerId, "wordle");
-            const extraStats = (stats.extraStats || {}) as Record<string, any>;
-            extraStats.totalSolves = (extraStats.totalSolves || 0) + 1;
-            extraStats.currentStreak = (extraStats.currentStreak || 0) + 1;
-            const time = Math.floor((state.endTime! - state.startTime) / 1000);
-            extraStats.fastestSolve = Math.min(extraStats.fastestSolve || Infinity, time);
-          }
           await storage.endGame(game.id);
         }
         
-        await sendMessage(message, wordle.renderBoard(state));
+        const embed = ui.createWordleEmbed(state);
+        await message.channel.send({ embeds: [embed] });
       } else {
-        await sendMessage(message, result.error || "Invalid guess.");
+        await message.reply(result.error || "Invalid guess.");
       }
     }
   }
 }
 
-function startGameTimer(gameId: string, message: Message) {
+function startGameTimer(gameId: string, channel: TextChannel) {
   const timer = setTimeout(async () => {
     const game = await storage.getActiveGameById(gameId);
     if (!game) return;
     
-    const state = game.state as any;
     const currentPlayerId = game.currentTurn;
     
     if (currentPlayerId && game.player2Id) {
@@ -730,7 +979,7 @@ function startGameTimer(gameId: string, message: Message) {
       await storage.recordGameResult(opponentId, game.gameType, "win");
       await storage.awardWinCoins(opponentId);
       
-      await sendMessage(message, `<@${currentPlayerId}> timed out. <@${opponentId}> wins!`);
+      await channel.send(`⏰ <@${currentPlayerId}> timed out. <@${opponentId}> wins!`);
     }
     
     await storage.endGame(gameId);
@@ -740,9 +989,9 @@ function startGameTimer(gameId: string, message: Message) {
   gameTimers.set(gameId, timer);
 }
 
-function resetGameTimer(gameId: string, message: Message) {
+function resetGameTimer(gameId: string, channel: TextChannel) {
   clearGameTimer(gameId);
-  startGameTimer(gameId, message);
+  startGameTimer(gameId, channel);
 }
 
 function clearGameTimer(gameId: string) {
@@ -753,13 +1002,26 @@ function clearGameTimer(gameId: string) {
   }
 }
 
-client.on("ready", async () => {
+client.on(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user?.tag}`);
   await storage.seedShopItems();
   console.log("Bot is ready!");
 });
 
-client.on("messageCreate", async (message: Message) => {
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    try {
+      await handleButtonInteraction(interaction);
+    } catch (error) {
+      console.error("Button interaction error:", error);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: "An error occurred.", ephemeral: true });
+      }
+    }
+  }
+});
+
+client.on(Events.MessageCreate, async (message: Message) => {
   if (message.author.bot) return;
   
   const content = message.content.trim();
@@ -768,75 +1030,75 @@ client.on("messageCreate", async (message: Message) => {
     const args = content.slice(PREFIX.length).trim().split(/\s+/);
     const command = args.shift()?.toLowerCase();
     
-    switch (command) {
-      case "help":
-        await handleHelp(message);
-        break;
-      case "profile":
-      case "p":
-        await handleProfile(message, args);
-        break;
-      case "leaderboard":
-      case "lb":
-        await handleLeaderboard(message, args);
-        break;
-      case "shop":
-        await handleShop(message, args);
-        break;
-      case "buy":
-        await handleBuy(message, args);
-        break;
-      case "inventory":
-      case "inv":
-        await handleInventory(message);
-        break;
-      case "equip":
-        await handleEquip(message, args);
-        break;
-      case "unequip":
-        await handleUnequip(message, args);
-        break;
-      case "connect4":
-      case "c4":
-        await handleGameCommand(message, "connect4");
-        break;
-      case "tictactoe":
-      case "ttt":
-        await handleGameCommand(message, "tictactoe");
-        break;
-      case "wordduel":
-      case "wd":
-        await handleGameCommand(message, "wordduel");
-        break;
-      case "chess":
-        await handleGameCommand(message, "chess");
-        break;
-      case "minesweeper":
-      case "ms":
-        await handleSoloGame(message, "minesweeper");
-        break;
-      case "wordle":
-      case "w":
-        await handleSoloGame(message, "wordle");
-        break;
-      case "quit":
-      case "q":
-        await handleQuit(message);
-        break;
-      case "accept":
-        await handleAccept(message);
-        break;
-      case "reveal":
-      case "r":
-      case "flag":
-      case "f":
-      case "move":
-      case "m":
-        await handleGameInput(message);
-        break;
+    try {
+      switch (command) {
+        case "help":
+          await handleHelp(message);
+          break;
+        case "profile":
+        case "p":
+          await handleProfile(message, args);
+          break;
+        case "leaderboard":
+        case "lb":
+          await handleLeaderboard(message, args);
+          break;
+        case "shop":
+          await handleShop(message, args);
+          break;
+        case "buy":
+          await handleBuy(message, args);
+          break;
+        case "inventory":
+        case "inv":
+          await handleInventory(message);
+          break;
+        case "equip":
+          await handleEquip(message, args);
+          break;
+        case "unequip":
+          await handleUnequip(message, args);
+          break;
+        case "connect4":
+        case "c4":
+          await handleGameCommand(message, "connect4");
+          break;
+        case "tictactoe":
+        case "ttt":
+          await handleGameCommand(message, "tictactoe");
+          break;
+        case "wordduel":
+        case "wd":
+          await handleGameCommand(message, "wordduel");
+          break;
+        case "chess":
+          await handleGameCommand(message, "chess");
+          break;
+        case "minesweeper":
+        case "ms":
+          await handleSoloGame(message, "minesweeper");
+          break;
+        case "wordle":
+        case "w":
+          await handleSoloGame(message, "wordle");
+          break;
+        case "quit":
+        case "q":
+          await handleQuit(message);
+          break;
+        case "accept":
+          await handleAccept(message);
+          break;
+      }
+    } catch (error) {
+      console.error("Command error:", error);
     }
   } else {
-    await handleGameInput(message);
+    try {
+      await handleTextGameInput(message);
+    } catch (error) {
+      console.error("Game input error:", error);
+    }
   }
 });
 
