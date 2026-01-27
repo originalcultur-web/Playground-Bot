@@ -60,10 +60,10 @@ export function createTicTacToeEmbed(state: any, currentPlayerName: string, isGa
 export function createConnect4Board(state: any, gameId: string, disabled = false) {
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
   
-  const columnRow = new ActionRowBuilder<ButtonBuilder>();
-  for (let col = 0; col < 7; col++) {
+  const row1 = new ActionRowBuilder<ButtonBuilder>();
+  for (let col = 0; col < 4; col++) {
     const colFull = state.board[0][col] !== 0;
-    columnRow.addComponents(
+    row1.addComponents(
       new ButtonBuilder()
         .setCustomId(`c4_${gameId}_${col}`)
         .setLabel(`${col + 1}`)
@@ -71,7 +71,20 @@ export function createConnect4Board(state: any, gameId: string, disabled = false
         .setDisabled(disabled || colFull)
     );
   }
-  rows.push(columnRow);
+  rows.push(row1);
+  
+  const row2 = new ActionRowBuilder<ButtonBuilder>();
+  for (let col = 4; col < 7; col++) {
+    const colFull = state.board[0][col] !== 0;
+    row2.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`c4_${gameId}_${col}`)
+        .setLabel(`${col + 1}`)
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(disabled || colFull)
+    );
+  }
+  rows.push(row2);
   
   return rows;
 }
