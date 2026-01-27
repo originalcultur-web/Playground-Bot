@@ -1,0 +1,612 @@
+Playground Discord Bot — Final Canonical Design Document (v1)
+
+Project Name: Playground
+Bot Type: Competitive multiplayer games + leaderboards + cosmetic shop
+Core Goal: A premium, simple, Discord-native gaming bot with competitive play and monetization via in-app currency.
+
+
+---
+
+1. Overview
+
+Playground is a Discord bot offering competitive PvP and solo games with global leaderboards and a premium cosmetic shop. The experience is inspired by Plato: instant gameplay, minimal UI, no clutter, and subtle identity expression.
+
+Games
+
+Word Duel (PvP, ranked)
+
+Connect 4 (PvP, ranked)
+
+Tic Tac Toe (PvP, ranked)
+
+Chess (PvP, ranked)
+
+Minesweeper (Solo, leaderboard)
+
+Wordle (Solo, leaderboard)
+
+
+
+---
+
+2. Core UX Principles
+
+Games start instantly (no menus)
+
+One command = one action
+
+Shop is accessed only via ,shop
+
+No rarity tiers
+
+No rotating or featured items
+
+Items are permanent
+
+Global leaderboards only
+
+Text-only UI (no embeds)
+
+Emojis used for cosmetics
+
+Skill-first presentation, cosmetics are subtle
+
+
+
+---
+
+3. Economy System
+
+3.1 Currency
+
+Single in-app currency: Coins
+
+Coins can be:
+
+Purchased with real money
+
+Earned slowly through gameplay
+
+
+
+3.2 Free Coin Earning (Capped)
+
+Ranked win: +5 coins
+
+Daily cap: 50 coins
+
+No coins for losses
+
+No login rewards
+
+No streak bonuses
+
+
+Purchases are the primary way to obtain coins.
+
+
+---
+
+4. Games & Rules
+
+4.1 Word Duel (PvP)
+
+Two players
+
+5 scrambled words
+
+Same words for both players
+
+First correct answer wins the point
+
+Most points after 5 words wins
+
+
+Edge Rules
+
+Tie after 5 words → draw
+
+Draws do not affect stats
+
+First message received by bot wins
+
+
+Stats Tracked
+
+Wins / Losses
+
+Average solve time
+
+Win streak
+
+Win rate
+
+
+
+---
+
+4.2 Connect 4 (PvP)
+
+Standard rules
+
+30 seconds per turn
+
+
+Edge Rules
+
+Draw = ignored (no stat change)
+
+Timeout = loss
+
+
+Stats Tracked
+
+Wins / Losses
+
+Win rate
+
+Win streak
+
+
+
+---
+
+4.3 Tic Tac Toe (PvP)
+
+Ranked: Best of 3
+
+Regular: Single game (still ranked)
+
+
+Edge Rules
+
+Draw = no win, no loss
+
+
+Stats Tracked
+
+Wins / Losses
+
+Win rate
+
+Win streak
+
+
+
+---
+
+4.4 Chess (PvP)
+
+Standard chess rules
+
+
+Edge Rules
+
+Timeout = loss
+
+Stalemate = draw
+
+Repetition = draw
+
+Draws do not affect wins/losses
+
+
+Stats Tracked
+
+Wins / Losses
+
+Win rate
+
+Win streak
+
+
+
+---
+
+4.5 Minesweeper (Solo)
+
+Random boards
+
+
+Stats Tracked
+
+Total solves
+
+Solve ratio
+
+Best time
+
+
+
+---
+
+4.6 Wordle (Solo)
+
+Random words
+
+
+Stats Tracked
+
+Total solves
+
+Current streak
+
+Fastest solve
+
+
+
+---
+
+5. Quit, Disconnect & AFK Rules
+
+quit or ,quit = instant forfeit
+
+Disconnect: 60 seconds to reconnect
+
+AFK (no input): 60 seconds → forfeit
+
+Same rules apply to all games
+
+
+
+---
+
+6. Matchmaking
+
+6.1 Random Match
+
+Command example:
+
+,connect4
+
+Attempts to match similar rank
+
+After 30s → widen range
+
+After 60s → match anyone
+
+
+6.2 Challenge Match
+
+Command example:
+
+,connect4 @user
+
+Sends a challenge
+
+Game starts instantly on accept
+
+
+6.3 Anti-Farming
+
+Same opponent cannot be matched again within 5 minutes
+
+
+
+---
+
+7. Ranking System
+
+7.1 Eligibility
+
+Minimum 20 ranked games to appear on leaderboard
+
+
+7.2 Rank Score Formula
+
+rank_score = (wins * 10) + win_rate
+
+7.3 Sorting Priority
+
+1. rank_score
+
+
+2. wins
+
+
+3. earliest account (tie-breaker)
+
+
+
+No decay. No seasons (v1).
+
+
+---
+
+8. Leaderboards
+
+Global only
+
+One leaderboard per game
+
+Top 10 displayed
+
+Player’s rank shown inline
+
+Cached globally
+
+Refresh every 5 minutes
+
+Text-only (no embeds)
+
+
+Example
+
+CONNECT 4 - LEADERBOARD
+
+1. Sapphire (@sapphire#1042)
+Wins: 122 Losses: 12 Win %: 91
+
+
+
+...
+
+YOUR RANK: 2474
+Wins: 23 Losses: 10 Win %: 70
+
+
+---
+
+9. Player Profiles
+
+Commands
+
+,profile
+,profile @user
+
+Profile Shows
+
+Display Name + Username
+
+Equipped badge
+
+Equipped title
+
+Total wins / losses
+
+Coin balance (self only)
+
+
+
+---
+
+10. Cosmetics System
+
+10.1 Cosmetic Types
+
+Badges
+
+Frames
+
+Titles
+
+Game-specific skins (boards, pieces, etc.)
+
+
+10.2 Visibility Rules
+
+Leaderboards: Badge + Title
+
+Games: Frames + game cosmetics
+
+Profile: All cosmetics
+
+
+10.3 Equipment Rules
+
+1 badge
+
+1 title
+
+1 frame
+
+Game cosmetics equipped per game
+
+
+
+---
+
+11. Shop System
+
+11.1 Commands
+
+,shop
+,shop <category or game>
+,preview <number>
+,buy <number>
+
+11.2 Principles
+
+No rotations
+
+No featured items
+
+No rarity tiers
+
+Items are permanent
+
+New items appear at the top
+
+Removed items stay usable
+
+
+
+---
+
+12. Inventory Management
+
+Commands
+
+,inventory
+,equip <item number>
+,unequip <type>
+
+Rules
+
+Items never expire
+
+Duplicate purchases blocked
+
+One item per type equipped
+
+
+
+---
+
+13. Purchase & Refund Rules
+
+Buying
+
+If item owned → blocked
+
+If insufficient coins → error
+
+Successful purchase → auto-equip
+
+
+Refunds / Chargebacks
+
+Coins removed
+
+Balance may go negative
+
+User cannot buy items while balance < 0
+
+Locked cosmetics until balance ≥ 0
+
+
+
+---
+
+14. Anti-Abuse & Limits
+
+1 active game per user
+
+5 matchmaking attempts per minute
+
+3 forfeits in 10 minutes → 5 minute queue lock
+
+
+
+---
+
+15. Game State Persistence
+
+Game state saved every move
+
+On bot restart:
+
+Games resume automatically
+
+Corrupted games are voided (no win/loss)
+
+
+
+
+---
+
+16. Database Schema (Simplified)
+
+Players
+
+user_id
+
+coins
+
+total_wins
+
+total_losses
+
+
+GameStats
+
+user_id
+
+game
+
+wins
+
+losses
+
+win_rate
+
+streak
+
+extra_stats (JSON)
+
+
+ActiveGames
+
+game_id
+
+players
+
+state
+
+last_action
+
+
+ShopItems
+
+id
+
+name
+
+emoji
+
+price
+
+category
+
+type
+
+game (nullable)
+
+active
+
+created_at
+
+
+UserInventory
+
+user_id
+
+item_id
+
+purchased_at
+
+equipped
+
+
+
+---
+
+17. Identity Philosophy (Final)
+
+Skill-first
+
+Cosmetics are subtle
+
+No flashy ranked visuals
+
+Identity shines in profiles & leaderboards
+
+
+
+---
+
+18. Final Outcome
+
+Playground is:
+
+Simple
+
+Competitive
+
+Monetizable
+
+Abuse-resistant
+
+Discord-native
+
+Easy to build and scale
