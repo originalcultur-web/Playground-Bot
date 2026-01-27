@@ -132,7 +132,7 @@ async function handleLeaderboard(message: Message, args: string[]) {
   let display = `**${game.toUpperCase()} - LEADERBOARD**\n\n`;
   
   if (leaders.length === 0) {
-    display += "No players with 20+ games yet.\n";
+    display += "No players yet. Be the first!\n";
   } else {
     for (let i = 0; i < leaders.length; i++) {
       const stat = leaders[i];
@@ -143,12 +143,7 @@ async function handleLeaderboard(message: Message, args: string[]) {
     }
   }
   
-  const totalGames = playerStats.wins + playerStats.losses;
-  if (totalGames >= 20) {
-    display += `\n**YOUR RANK:** ${playerRank}\n`;
-  } else {
-    display += `\nPlay ${20 - totalGames} more games to appear on leaderboard.\n`;
-  }
+  display += `\n**YOUR RANK:** ${playerRank}\n`;
   display += `Wins: ${playerStats.wins} | Losses: ${playerStats.losses} | Win%: ${playerStats.winRate.toFixed(0)}`;
   
   leaderboardCache.set(cacheKey, { data: display, timestamp: Date.now() });
@@ -740,6 +735,34 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     resetGameTimer(game.id, interaction.channel as TextChannel);
   }
   
+  else if (customId.startsWith("msflag_")) {
+    const gameId = customId.split("_")[1];
+    
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    const state = game.state as any;
+    
+    if (userId !== state.playerId) {
+      await interaction.reply({ content: "This isn't your game!", ephemeral: true });
+      return;
+    }
+    
+    state.flagMode = !state.flagMode;
+    await storage.updateGameState(game.id, state);
+    
+    const buttons = ui.createMinesweeperBoard(state, game.id);
+    const modeText = state.flagMode ? "🚩 Flag mode - click to place/remove flags" : "🔍 Reveal mode - click to reveal cells";
+    
+    await interaction.update({
+      content: `💣 **MINESWEEPER**\n${modeText}`,
+      components: buttons
+    });
+  }
+  
   else if (customId.startsWith("ms_")) {
     const parts = customId.split("_");
     const gameId = parts[1];
@@ -759,7 +782,16 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       return;
     }
     
-    revealMinesweeperCell(state, row, col);
+    if (state.flagMode) {
+      state.flagged[row][col] = !state.flagged[row][col];
+    } else {
+      if (state.flagged[row][col]) {
+        await interaction.reply({ content: "Remove the flag first!", ephemeral: true });
+        return;
+      }
+      revealMinesweeperCell(state, row, col);
+    }
+    
     await storage.updateGameState(game.id, state);
     
     if (state.gameOver) {
@@ -767,7 +799,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     }
     
     const buttons = ui.createMinesweeperBoard(state, game.id);
-    let statusText = "Click cells to reveal";
+    let statusText = state.flagMode ? "🚩 Flag mode - click to place/remove flags" : "🔍 Reveal mode - click to reveal cells";
     
     if (state.gameOver) {
       if (state.won) {

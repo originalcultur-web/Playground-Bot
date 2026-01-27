@@ -16,7 +16,7 @@ export interface WordDuelState {
   currentWordIndex: number;
   scores: [number, number];
   roundStartTime: number;
-  roundAnswers: Map<string, { answer: string; time: number }>;
+  roundAnswers: Record<string, { answer: string; time: number }>;
   lastMoveTime: number;
 }
 
@@ -43,7 +43,7 @@ export function createGameState(player1Id: string, player2Id: string): WordDuelS
     currentWordIndex: 0,
     scores: [0, 0],
     roundStartTime: Date.now(),
-    roundAnswers: new Map(),
+    roundAnswers: {},
     lastMoveTime: Date.now(),
   };
 }
@@ -64,12 +64,12 @@ export function submitAnswer(state: WordDuelState, playerId: string, answer: str
     return { correct: false, first: false };
   }
   
-  if (state.roundAnswers.has(playerId)) {
+  if (state.roundAnswers[playerId]) {
     return { correct: true, first: false };
   }
   
-  const isFirst = state.roundAnswers.size === 0;
-  state.roundAnswers.set(playerId, { answer: normalizedAnswer, time: Date.now() });
+  const isFirst = Object.keys(state.roundAnswers).length === 0;
+  state.roundAnswers[playerId] = { answer: normalizedAnswer, time: Date.now() };
   state.lastMoveTime = Date.now();
   
   if (isFirst) {
@@ -82,7 +82,7 @@ export function submitAnswer(state: WordDuelState, playerId: string, answer: str
 
 export function nextRound(state: WordDuelState): boolean {
   state.currentWordIndex++;
-  state.roundAnswers = new Map();
+  state.roundAnswers = {};
   state.roundStartTime = Date.now();
   return state.currentWordIndex < 5;
 }

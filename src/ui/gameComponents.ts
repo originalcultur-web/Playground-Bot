@@ -148,6 +148,7 @@ export function createChessEmbed(state: any, currentPlayerName: string, board: s
 
 export function createMinesweeperBoard(state: any, gameId: string) {
   const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+  const flagMode = state.flagMode || false;
   
   for (let row = 0; row < 5; row++) {
     const actionRow = new ActionRowBuilder<ButtonBuilder>();
@@ -184,6 +185,17 @@ export function createMinesweeperBoard(state: any, gameId: string) {
       );
     }
     rows.push(actionRow);
+  }
+  
+  if (!state.gameOver) {
+    const flagRow = new ActionRowBuilder<ButtonBuilder>();
+    flagRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`msflag_${gameId}`)
+        .setLabel(flagMode ? "🚩 Flag Mode ON" : "🔍 Reveal Mode")
+        .setStyle(flagMode ? ButtonStyle.Danger : ButtonStyle.Primary)
+    );
+    rows.push(flagRow);
   }
   
   return rows;

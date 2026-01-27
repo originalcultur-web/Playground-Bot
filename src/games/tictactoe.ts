@@ -9,7 +9,7 @@ export interface TicTacToeState {
   lastMoveTime: number;
 }
 
-export function createGameState(player1Id: string, player2Id: string, bestOf3 = true): TicTacToeState {
+export function createGameState(player1Id: string, player2Id: string): TicTacToeState {
   return {
     board: Array(9).fill(0),
     currentPlayer: 1,
@@ -17,7 +17,7 @@ export function createGameState(player1Id: string, player2Id: string, bestOf3 = 
     player2Id,
     roundWins: [0, 0],
     currentRound: 1,
-    maxRounds: bestOf3 ? 3 : 1,
+    maxRounds: 1,
     lastMoveTime: Date.now(),
   };
 }

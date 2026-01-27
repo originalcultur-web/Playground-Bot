@@ -138,10 +138,7 @@ export async function recordGameResult(
 
 export async function getLeaderboard(game: string, limit = 10): Promise<GameStat[]> {
   return db.query.gameStats.findMany({
-    where: and(
-      eq(gameStats.game, game),
-      gt(sql`${gameStats.wins} + ${gameStats.losses}`, 19)
-    ),
+    where: eq(gameStats.game, game),
     orderBy: [desc(gameStats.rankScore), desc(gameStats.wins)],
     limit,
   });
