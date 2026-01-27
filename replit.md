@@ -4,7 +4,7 @@ A competitive multiplayer gaming Discord bot with global leaderboards and a cosm
 
 ## Overview
 
-Playground offers competitive PvP and solo games with a text-based UI, coin economy, and cosmetic customization.
+Playground offers competitive PvP and solo games with interactive button-based UI, coin economy, and cosmetic customization.
 
 ## Games
 
@@ -15,7 +15,7 @@ Playground offers competitive PvP and solo games with a text-based UI, coin econ
 - **Chess** - Full chess with algebraic notation moves
 
 ### Solo Leaderboard Games
-- **Minesweeper** - 9x9 grid with 10 mines
+- **Minesweeper** - 5x5 grid with interactive buttons
 - **Wordle** - 6 attempts to guess 5-letter word
 
 ## Commands
@@ -31,8 +31,10 @@ Playground offers competitive PvP and solo games with a text-based UI, coin econ
 ### Gameplay Commands
 - `,quit` / `,q` - Forfeit current game or leave queue
 - `,accept` - Accept a challenge
-- `,reveal A1` / `,r A1` - Reveal cell in Minesweeper
-- `,flag A1` / `,f A1` - Toggle flag in Minesweeper
+- **Tic Tac Toe & Connect 4** - Click buttons to play
+- **Minesweeper** - Click cells to reveal
+- **Chess** - Type moves in algebraic notation (e.g., e4, Nf3)
+- **Wordle & Word Duel** - Type your answers
 
 ### Profile & Stats
 - `,profile` / `,p` - View your profile
