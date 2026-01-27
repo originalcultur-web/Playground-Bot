@@ -285,33 +285,28 @@ async function startPvPGame(channel: TextChannel, gameType: string, player1Id: s
   let sentMessage;
   
   if (gameType === "tictactoe") {
-    const embed = ui.createTicTacToeEmbed(state, player1Name);
     const buttons = ui.createTicTacToeBoard(state, game.id);
+    const scoreText = state.maxRounds > 1 ? `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
     sentMessage = await channel.send({
-      content: `🎮 <@${player1Id}> vs <@${player2Id}>`,
-      embeds: [embed],
+      content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${player1Name}**'s turn`,
       components: buttons
     });
   } else if (gameType === "connect4") {
-    const embed = ui.createConnect4Embed(state, player1Name);
     const buttons = ui.createConnect4Board(state, game.id);
+    const display = ui.createConnect4Display(state);
     sentMessage = await channel.send({
-      content: `🎮 <@${player1Id}> vs <@${player2Id}>`,
-      embeds: [embed],
+      content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${player1Name}**'s turn`,
       components: buttons
     });
   } else if (gameType === "wordduel") {
-    const embed = ui.createWordDuelEmbed(state);
+    const scrambled = state.scrambledWords[0].toUpperCase();
     sentMessage = await channel.send({
-      content: `⚔️ <@${player1Id}> vs <@${player2Id}>`,
-      embeds: [embed]
+      content: `⚔️ **WORD DUEL**\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\nUnscramble: **${scrambled}**\nType your answer!`
     });
   } else if (gameType === "chess") {
     const chessBoard = createChessDisplay(state);
-    const embed = ui.createChessEmbed(state, player1Name, chessBoard);
     sentMessage = await channel.send({
-      content: `♟️ <@${player1Id}> (White) vs <@${player2Id}> (Black)`,
-      embeds: [embed]
+      content: `♟️ **CHESS**\n${player1Name} (White) vs ${player2Name} (Black)\n\`\`\`\n${chessBoard}\n\`\`\`\nIt's **${player1Name}**'s turn - Type your move (e.g., e4, Nf3)`
     });
   }
   
@@ -454,11 +449,10 @@ async function handleSoloGame(message: Message, gameType: string) {
     state.flagged = Array(5).fill(null).map(() => Array(5).fill(false));
     
     const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
-    const embed = ui.createMinesweeperEmbed(state);
     const buttons = ui.createMinesweeperBoard(state, game.id);
     
     sentMessage = await message.channel.send({
-      embeds: [embed],
+      content: `💣 **MINESWEEPER**\nClick cells to reveal`,
       components: buttons
     });
     
@@ -468,10 +462,9 @@ async function handleSoloGame(message: Message, gameType: string) {
   } else if (gameType === "wordle") {
     state = wordle.createGameState(playerId);
     const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
-    const embed = ui.createWordleEmbed(state);
     
     sentMessage = await message.channel.send({
-      embeds: [embed]
+      content: `📝 **WORDLE**\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n\nGuesses: 0/6\nType a 5-letter word to guess!`
     });
     
     if (sentMessage) {
@@ -535,11 +528,13 @@ async function handleQuit(message: Message) {
   
   if (game.player2Id) {
     const opponentId = game.player1Id === playerId ? game.player2Id : game.player1Id;
+    const playerName = await getPlayerName(playerId);
+    const opponentName = await getPlayerName(opponentId);
     await storage.recordGameResult(playerId, game.gameType, "loss");
     await storage.recordGameResult(opponentId, game.gameType, "win");
     await storage.awardWinCoins(opponentId);
     await storage.recordForfeit(playerId);
-    await message.channel.send(`<@${playerId}> forfeited. <@${opponentId}> wins!`);
+    await message.channel.send(`**${playerName}** forfeited. **${opponentName}** wins!`);
   } else {
     await message.channel.send("Game ended.");
   }
@@ -579,6 +574,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     
     const currentPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
     
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
+    
     if (tictactoe.checkWin(state.board, state.currentPlayer)) {
       tictactoe.recordRoundWin(state, state.currentPlayer);
       
@@ -597,11 +595,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         await storage.endGame(game.id);
         
         const winnerName = await getPlayerName(winnerId);
-        const embed = ui.createTicTacToeEmbed(state, "", true, `🏆 ${winnerName} wins the match!`);
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
+        const scoreText = state.maxRounds > 1 ? `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
         
         await interaction.update({
-          embeds: [embed],
+          content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\n🏆 **${winnerName}** wins the match!`,
           components: buttons
         });
         return;
@@ -611,11 +609,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.updateGameState(game.id, state);
       
       const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
-      const embed = ui.createTicTacToeEmbed(state, nextPlayerName);
       const buttons = ui.createTicTacToeBoard(state, game.id);
+      const scoreText = `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
       
       await interaction.update({
-        embeds: [embed],
+        content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`,
         components: buttons
       });
       resetGameTimer(game.id, interaction.channel as TextChannel);
@@ -627,11 +625,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         clearGameTimer(game.id);
         await storage.endGame(game.id);
         
-        const embed = ui.createTicTacToeEmbed(state, "", true, "🤝 Match ended in a draw!");
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
+        const scoreText = `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
         
         await interaction.update({
-          embeds: [embed],
+          content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\n🤝 Match ended in a draw!`,
           components: buttons
         });
         return;
@@ -641,11 +639,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.updateGameState(game.id, state);
       
       const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
-      const embed = ui.createTicTacToeEmbed(state, nextPlayerName);
       const buttons = ui.createTicTacToeBoard(state, game.id);
+      const scoreText = `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
       
       await interaction.update({
-        embeds: [embed],
+        content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`,
         components: buttons
       });
       resetGameTimer(game.id, interaction.channel as TextChannel);
@@ -656,11 +654,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     await storage.updateGameState(game.id, state, tictactoe.getCurrentPlayerId(state));
     
     const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
-    const embed = ui.createTicTacToeEmbed(state, nextPlayerName);
     const buttons = ui.createTicTacToeBoard(state, game.id);
+    const scoreText = state.maxRounds > 1 ? `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
     
     await interaction.update({
-      embeds: [embed],
+      content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`,
       components: buttons
     });
     resetGameTimer(game.id, interaction.channel as TextChannel);
@@ -691,6 +689,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       return;
     }
     
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
+    const display = ui.createConnect4Display(state);
+    
     if (connect4.checkWin(state.board, state.currentPlayer)) {
       const winnerId = connect4.getCurrentPlayerId(state);
       const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
@@ -703,11 +705,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.endGame(game.id);
       
       const winnerName = await getPlayerName(winnerId);
-      const embed = ui.createConnect4Embed(state, "", true, `🏆 ${winnerName} wins!`);
       const buttons = ui.createConnect4Board(state, game.id, true);
       
       await interaction.update({
-        embeds: [embed],
+        content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🏆 **${winnerName}** wins!`,
         components: buttons
       });
       return;
@@ -717,11 +718,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       clearGameTimer(game.id);
       await storage.endGame(game.id);
       
-      const embed = ui.createConnect4Embed(state, "", true, "🤝 It's a draw!");
       const buttons = ui.createConnect4Board(state, game.id, true);
       
       await interaction.update({
-        embeds: [embed],
+        content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🤝 It's a draw!`,
         components: buttons
       });
       return;
@@ -731,11 +731,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     await storage.updateGameState(game.id, state, connect4.getCurrentPlayerId(state));
     
     const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(state));
-    const embed = ui.createConnect4Embed(state, nextPlayerName);
     const buttons = ui.createConnect4Board(state, game.id);
     
     await interaction.update({
-      embeds: [embed],
+      content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${nextPlayerName}**'s turn`,
       components: buttons
     });
     resetGameTimer(game.id, interaction.channel as TextChannel);
@@ -767,11 +766,20 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.endGame(game.id);
     }
     
-    const embed = ui.createMinesweeperEmbed(state, state.gameOver);
     const buttons = ui.createMinesweeperBoard(state, game.id);
+    let statusText = "Click cells to reveal";
+    
+    if (state.gameOver) {
+      if (state.won) {
+        const time = Math.floor((state.endTime - state.startTime) / 1000);
+        statusText = `You won! Time: ${time}s`;
+      } else {
+        statusText = "Game Over! You hit a mine.";
+      }
+    }
     
     await interaction.update({
-      embeds: [embed],
+      content: `💣 **MINESWEEPER**\n${statusText}`,
       components: buttons
     });
   }
@@ -794,20 +802,20 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     
     if (game.player2Id) {
       const opponentId = game.player1Id === userId ? game.player2Id : game.player1Id;
+      const userName = await getPlayerName(userId);
+      const opponentName = await getPlayerName(opponentId);
       await storage.recordGameResult(userId, game.gameType, "loss");
       await storage.recordGameResult(opponentId, game.gameType, "win");
       await storage.awardWinCoins(opponentId);
       await storage.recordForfeit(userId);
       
       await interaction.update({
-        content: `<@${userId}> forfeited. <@${opponentId}> wins!`,
-        embeds: [],
+        content: `**${userName}** forfeited. **${opponentName}** wins!`,
         components: []
       });
     } else {
       await interaction.update({
         content: "Game ended.",
-        embeds: [],
         components: []
       });
     }
@@ -873,6 +881,10 @@ async function handleTextGameInput(message: Message) {
       const hasMore = wordduel.nextRound(state);
       await storage.updateGameState(game.id, state);
       
+      const player1Name = await getPlayerName(state.player1Id);
+      const player2Name = await getPlayerName(state.player2Id);
+      const playerName = await getPlayerName(playerId);
+      
       if (!hasMore || wordduel.isGameOver(state)) {
         const winner = wordduel.getWinner(state);
         if (winner) {
@@ -885,17 +897,15 @@ async function handleTextGameInput(message: Message) {
         clearGameTimer(game.id);
         await storage.endGame(game.id);
         
-        const embed = ui.createWordDuelEmbed(state, true);
-        await message.channel.send({ embeds: [embed] });
+        const winnerName = winner ? await getPlayerName(winner) : null;
+        const resultText = winnerName ? `🏆 **${winnerName}** wins!` : "🤝 It's a draw!";
+        await message.channel.send(`⚔️ **WORD DUEL**\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`);
         return;
       }
       
       const previousWord = state.words[state.currentWordIndex - 1];
-      const embed = ui.createWordDuelEmbed(state);
-      await message.channel.send({
-        content: `✅ <@${playerId}> got it! The word was: **${previousWord.toUpperCase()}**`,
-        embeds: [embed]
-      });
+      const scrambled = state.scrambledWords[state.currentWordIndex].toUpperCase();
+      await message.channel.send(`✅ **${playerName}** got it! The word was: **${previousWord.toUpperCase()}**\n\n⚔️ **WORD DUEL**\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\nUnscramble: **${scrambled}**`);
       resetGameTimer(game.id, message.channel as TextChannel);
     }
   }
@@ -915,6 +925,8 @@ async function handleTextGameInput(message: Message) {
     const status = chess.getGameStatus(state);
     await storage.updateGameState(game.id, state, chess.getCurrentPlayerId(state));
     
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
     const currentPlayerName = await getPlayerName(chess.getCurrentPlayerId(state));
     const chessBoard = createChessDisplay(state);
     
@@ -931,16 +943,14 @@ async function handleTextGameInput(message: Message) {
       
       const winnerName = status.winner ? await getPlayerName(status.winner) : null;
       const resultText = status.result === "checkmate" 
-        ? `Checkmate! ${winnerName} wins!`
+        ? `Checkmate! **${winnerName}** wins!`
         : `Game ended in a ${status.result}!`;
       
-      const embed = ui.createChessEmbed(state, "", chessBoard, true, resultText);
-      await message.channel.send({ embeds: [embed] });
+      await message.channel.send(`♟️ **CHESS**\n${player1Name} (White) vs ${player2Name} (Black)\n\`\`\`\n${chessBoard}\n\`\`\`\n${resultText}`);
       return;
     }
     
-    const embed = ui.createChessEmbed(state, currentPlayerName, chessBoard);
-    await message.channel.send({ embeds: [embed] });
+    await message.channel.send(`♟️ **CHESS**\n${player1Name} (White) vs ${player2Name} (Black)\n\`\`\`\n${chessBoard}\n\`\`\`\nIt's **${currentPlayerName}**'s turn - Type your move (e.g., e4, Nf3)`);
     resetGameTimer(game.id, message.channel as TextChannel);
   }
   
@@ -957,13 +967,67 @@ async function handleTextGameInput(message: Message) {
           await storage.endGame(game.id);
         }
         
-        const embed = ui.createWordleEmbed(state);
-        await message.channel.send({ embeds: [embed] });
+        let display = "📝 **WORDLE**\n";
+        for (const guess of state.guesses) {
+          const colors = evaluateWordleGuess(state.targetWord, guess);
+          display += colors.join("") + " **" + guess.toUpperCase() + "**\n";
+        }
+        const remaining = state.maxGuesses - state.guesses.length;
+        for (let i = 0; i < remaining; i++) {
+          display += "⬜⬜⬜⬜⬜\n";
+        }
+        display += `\nGuesses: ${state.guesses.length}/${state.maxGuesses}`;
+        
+        if (state.gameOver) {
+          if (state.won) {
+            const time = Math.floor((state.endTime - state.startTime) / 1000);
+            display += `\n\n🎉 You won in ${state.guesses.length} guess${state.guesses.length > 1 ? 'es' : ''}! Time: ${time}s`;
+          } else {
+            display += `\n\nGame over! The word was: **${state.targetWord.toUpperCase()}**`;
+          }
+        } else {
+          display += "\nType a 5-letter word to guess!";
+        }
+        
+        await message.channel.send(display);
       } else {
         await message.reply(result.error || "Invalid guess.");
       }
     }
   }
+}
+
+function evaluateWordleGuess(targetWord: string, guess: string): string[] {
+  const result: string[] = [];
+  const targetChars = targetWord.split('');
+  const guessChars = guess.split('');
+  const used = new Array(5).fill(false);
+  
+  for (let i = 0; i < 5; i++) {
+    if (guessChars[i] === targetChars[i]) {
+      result[i] = "🟩";
+      used[i] = true;
+    }
+  }
+  
+  for (let i = 0; i < 5; i++) {
+    if (result[i]) continue;
+    
+    let found = false;
+    for (let j = 0; j < 5; j++) {
+      if (!used[j] && guessChars[i] === targetChars[j]) {
+        result[i] = "🟨";
+        used[j] = true;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      result[i] = "⬛";
+    }
+  }
+  
+  return result;
 }
 
 function startGameTimer(gameId: string, channel: TextChannel) {
