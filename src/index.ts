@@ -249,19 +249,19 @@ async function handleLeaderboard(message: Message, args: string[]) {
       
       if (isPvP) {
         display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-        display += `   ⭐ ${stat.eloRating}  🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
+        display += `\u2800  ⭐ ${stat.eloRating}  🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
       } else {
         display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-        display += `   🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
+        display += `\u2800  🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
       }
     }
   }
   
   display += `\n**YOUR RANK:** #${playerRank}\n`;
   if (isPvP) {
-    display += `⭐ ${playerStats.eloRating}  🏆 ${playerStats.wins}  💀 ${playerStats.losses}  📈 ${playerStats.winRate.toFixed(0)}%`;
+    display += `\u2800  ⭐ ${playerStats.eloRating}  🏆 ${playerStats.wins}  💀 ${playerStats.losses}  📈 ${playerStats.winRate.toFixed(0)}%`;
   } else {
-    display += `🏆 ${playerStats.wins}  💀 ${playerStats.losses}  📈 ${playerStats.winRate.toFixed(0)}%`;
+    display += `\u2800  🏆 ${playerStats.wins}  💀 ${playerStats.losses}  📈 ${playerStats.winRate.toFixed(0)}%`;
   }
   
   leaderboardCache.set(cacheKey, { data: display, timestamp: Date.now() });
