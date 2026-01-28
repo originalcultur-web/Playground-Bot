@@ -55,8 +55,12 @@ export const matchHistory = pgTable("match_history", {
   gameType: text("game_type").notNull(),
   player1Id: text("player1_id").notNull(),
   player2Id: text("player2_id"),
+  player1Name: text("player1_name"),
+  player2Name: text("player2_name"),
   winnerId: text("winner_id"),
   result: text("result").notNull(),
+  player1EloChange: integer("player1_elo_change"),
+  player2EloChange: integer("player2_elo_change"),
   duration: integer("duration"),
   completedAt: timestamp("completed_at").defaultNow().notNull(),
 });

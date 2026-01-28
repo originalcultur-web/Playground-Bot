@@ -102,7 +102,10 @@ function calculateEloChange(winnerElo: number, loserElo: number): number {
 export async function recordPvPResult(
   winnerId: string,
   loserId: string,
-  game: string
+  game: string,
+  winnerName?: string,
+  loserName?: string,
+  duration?: number
 ): Promise<{ winnerChange: number; loserChange: number }> {
   const winnerStats = await getOrCreateGameStats(winnerId, game);
   const loserStats = await getOrCreateGameStats(loserId, game);
@@ -155,7 +158,46 @@ export async function recordPvPResult(
       .where(eq(players.discordId, loserId));
   }
   
+  await db.insert(matchHistory).values({
+    gameType: game,
+    player1Id: winnerId,
+    player2Id: loserId,
+    player1Name: winnerName || winnerPlayer?.displayName || winnerPlayer?.username,
+    player2Name: loserName || loserPlayer?.displayName || loserPlayer?.username,
+    winnerId: winnerId,
+    result: "win",
+    player1EloChange: eloChange,
+    player2EloChange: -eloChange,
+    duration: duration,
+  });
+  
   return { winnerChange: eloChange, loserChange: -eloChange };
+}
+
+export async function getMatchHistory(discordId: string, limit: number = 5) {
+  const matches = await db.query.matchHistory.findMany({
+    where: or(
+      eq(matchHistory.player1Id, discordId),
+      eq(matchHistory.player2Id, discordId)
+    ),
+    orderBy: desc(matchHistory.completedAt),
+    limit: limit,
+  });
+  
+  return matches.map(match => {
+    const isPlayer1 = match.player1Id === discordId;
+    const isWinner = match.winnerId === discordId;
+    const opponentName = isPlayer1 ? match.player2Name : match.player1Name;
+    const eloChange = isPlayer1 ? match.player1EloChange : match.player2EloChange;
+    
+    return {
+      gameType: match.gameType,
+      opponentName: opponentName || "Unknown",
+      result: isWinner ? "win" : "loss",
+      eloChange: eloChange || 0,
+      completedAt: match.completedAt,
+    };
+  });
 }
 
 export async function recordGameResult(
