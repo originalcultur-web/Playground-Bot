@@ -139,7 +139,7 @@ export async function recordGameResult(
 export async function getLeaderboard(game: string, limit = 10): Promise<GameStat[]> {
   return db.query.gameStats.findMany({
     where: eq(gameStats.game, game),
-    orderBy: [desc(gameStats.rankScore), desc(gameStats.wins)],
+    orderBy: [desc(gameStats.wins), desc(gameStats.winRate)],
     limit,
   });
 }
@@ -149,8 +149,7 @@ export async function getPlayerRank(discordId: string, game: string): Promise<nu
   const result = await db.execute(sql`
     SELECT COUNT(*) + 1 as rank FROM game_stats 
     WHERE game = ${game} 
-    AND (wins + losses) > 19
-    AND rank_score > ${stats.rankScore}
+    AND wins > ${stats.wins}
   `);
   return Number((result.rows[0] as any)?.rank || 0);
 }
