@@ -13,6 +13,7 @@ import * as connect4 from "./games/connect4.js";
 import * as tictactoe from "./games/tictactoe.js";
 import * as wordduel from "./games/wordduel.js";
 import * as chess from "./games/chess.js";
+import { Chess as ChessJs } from "chess.js";
 import * as minesweeper from "./games/minesweeper.js";
 import * as wordle from "./games/wordle.js";
 import * as ui from "./ui/gameComponents.js";
@@ -313,9 +314,8 @@ async function startPvPGame(channel: TextChannel, gameType: string, player1Id: s
 }
 
 function createChessDisplay(state: any): string {
-  const chessModule = chess as any;
-  const chessJs = new (require("chess.js").Chess)(state.fen);
-  const board = chessJs.board();
+  const chessInstance = new ChessJs(state.fen);
+  const board = chessInstance.board();
   
   const pieceMap: Record<string, string> = {
     "wk": "♔", "wq": "♕", "wr": "♖", "wb": "♗", "wn": "♘", "wp": "♙",
@@ -351,10 +351,11 @@ async function handleGameCommand(message: Message, gameType: string) {
     return;
   }
   
-  if (await storage.isQueueLocked(playerId)) {
-    await message.channel.send("You're temporarily locked from matchmaking due to forfeits.");
-    return;
-  }
+  // Disabled for testing - uncomment to enable forfeit lockout
+  // if (await storage.isQueueLocked(playerId)) {
+  //   await message.channel.send("You're temporarily locked from matchmaking due to forfeits.");
+  //   return;
+  // }
   
   if (message.mentions.users.size > 0) {
     const challenged = message.mentions.users.first()!;
