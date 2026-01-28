@@ -30,7 +30,7 @@ args = "npm run start"
 outputType = "console"
 
 [deployment]
-deploymentTarget = "autoscale"
+deploymentTarget = "vm"
 run = ["npm", "run", "start"]
 
 [[ports]]
