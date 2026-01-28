@@ -198,6 +198,12 @@ export async function updateGameState(gameId: string, state: Record<string, any>
     .where(eq(activeGames.id, gameId));
 }
 
+export async function updateGameMessageIds(gameId: string, player1MessageId: string, player2MessageId?: string): Promise<void> {
+  await db.update(activeGames)
+    .set({ player1MessageId, player2MessageId: player2MessageId || null })
+    .where(eq(activeGames.id, gameId));
+}
+
 export async function endGame(gameId: string): Promise<void> {
   await db.delete(activeGames).where(eq(activeGames.id, gameId));
 }

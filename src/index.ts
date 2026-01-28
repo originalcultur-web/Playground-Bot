@@ -65,6 +65,35 @@ async function sendToGameChannels(game: any, messageOptions: any) {
   return channels[0];
 }
 
+async function syncGameMessages(game: any, content: string, components?: any[]): Promise<void> {
+  const messageOptions: any = { content };
+  if (components) {
+    messageOptions.components = components;
+  }
+  
+  try {
+    const channel1 = await client.channels.fetch(game.channelId) as TextChannel;
+    if (channel1 && game.player1MessageId) {
+      const msg1 = await channel1.messages.fetch(game.player1MessageId);
+      if (msg1) await msg1.edit(messageOptions);
+    }
+  } catch (e) {
+    console.error("Failed to sync to player1 channel:", e);
+  }
+  
+  if (game.player2ChannelId && game.player2ChannelId !== game.channelId && game.player2MessageId) {
+    try {
+      const channel2 = await client.channels.fetch(game.player2ChannelId) as TextChannel;
+      if (channel2) {
+        const msg2 = await channel2.messages.fetch(game.player2MessageId);
+        if (msg2) await msg2.edit(messageOptions);
+      }
+    } catch (e) {
+      console.error("Failed to sync to player2 channel:", e);
+    }
+  }
+}
+
 async function handleHelp(message: Message) {
   const help = `**PLAYGROUND - Commands**
 
@@ -319,19 +348,24 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
   }
   
   const messageOptions = gameType === "wordduel" ? { content } : { content, components: buttons };
-  const sentMessage = await player1Channel.send(messageOptions);
-  gameMessages.set(game.id, sentMessage.id);
+  const player1Message = await player1Channel.send(messageOptions);
+  gameMessages.set(game.id, player1Message.id);
+  
+  let player2MessageId: string | undefined;
   
   if (player2ChannelId && player2ChannelId !== player1Channel.id) {
     try {
       const player2Channel = await client.channels.fetch(player2ChannelId) as TextChannel;
       if (player2Channel) {
-        await player2Channel.send(messageOptions);
+        const player2Message = await player2Channel.send(messageOptions);
+        player2MessageId = player2Message.id;
       }
     } catch (e) {
       console.error("Could not send to player2 channel:", e);
     }
   }
+  
+  await storage.updateGameMessageIds(game.id, player1Message.id, player2MessageId);
   
   startGameTimer(game.id, player1Channel);
 }
@@ -596,11 +630,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         const winnerName = await getPlayerName(winnerId);
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
         const scoreText = state.maxRounds > 1 ? `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
+        const content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\n🏆 **${winnerName}** wins the match!`;
         
-        await interaction.update({
-          content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\n🏆 **${winnerName}** wins the match!`,
-          components: buttons
-        });
+        await interaction.deferUpdate();
+        await syncGameMessages(game, content, buttons);
         return;
       }
       
@@ -610,11 +643,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
       const buttons = ui.createTicTacToeBoard(state, game.id);
       const scoreText = `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
+      const content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`;
       
-      await interaction.update({
-        content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`,
-        components: buttons
-      });
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
       resetGameTimer(game.id, interaction.channel as TextChannel);
       return;
     }
@@ -626,11 +658,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
         const scoreText = `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
+        const content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\n🤝 Match ended in a draw!`;
         
-        await interaction.update({
-          content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\n🤝 Match ended in a draw!`,
-          components: buttons
-        });
+        await interaction.deferUpdate();
+        await syncGameMessages(game, content, buttons);
         return;
       }
       
@@ -640,11 +671,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
       const buttons = ui.createTicTacToeBoard(state, game.id);
       const scoreText = `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
+      const content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`;
       
-      await interaction.update({
-        content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`,
-        components: buttons
-      });
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
       resetGameTimer(game.id, interaction.channel as TextChannel);
       return;
     }
@@ -655,11 +685,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
     const buttons = ui.createTicTacToeBoard(state, game.id);
     const scoreText = state.maxRounds > 1 ? `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
+    const content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`;
     
-    await interaction.update({
-      content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`,
-      components: buttons
-    });
+    await interaction.deferUpdate();
+    await syncGameMessages(game, content, buttons);
     resetGameTimer(game.id, interaction.channel as TextChannel);
   }
   
@@ -705,11 +734,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       
       const winnerName = await getPlayerName(winnerId);
       const buttons = ui.createConnect4Board(state, game.id, true);
+      const content = `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🏆 **${winnerName}** wins!`;
       
-      await interaction.update({
-        content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🏆 **${winnerName}** wins!`,
-        components: buttons
-      });
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
       return;
     }
     
@@ -718,11 +746,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.endGame(game.id);
       
       const buttons = ui.createConnect4Board(state, game.id, true);
+      const content = `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🤝 It's a draw!`;
       
-      await interaction.update({
-        content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🤝 It's a draw!`,
-        components: buttons
-      });
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
       return;
     }
     
@@ -731,11 +758,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     
     const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(state));
     const buttons = ui.createConnect4Board(state, game.id);
+    const content = `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${nextPlayerName}**'s turn`;
     
-    await interaction.update({
-      content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${nextPlayerName}**'s turn`,
-      components: buttons
-    });
+    await interaction.deferUpdate();
+    await syncGameMessages(game, content, buttons);
     resetGameTimer(game.id, interaction.channel as TextChannel);
   }
   
