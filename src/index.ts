@@ -1,8 +1,13 @@
 import http from "http";
 
 const healthServer = http.createServer((req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("Playground Bot is running!");
+  if (req.url === "/" || req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("OK");
+  } else {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("Playground Bot is running!");
+  }
 });
 healthServer.listen(5000, "0.0.0.0", () => {
   console.log("Health check server running on port 5000");
