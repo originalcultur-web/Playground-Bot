@@ -314,6 +314,248 @@ async function handleUnequip(message: Message, _args: string[]) {
   await message.channel.send("🚧 Equipment system coming soon!");
 }
 
+async function handleStaff(message: Message) {
+  const staffList = await storage.getAllStaff();
+  
+  if (staffList.length === 0) {
+    await message.channel.send("No staff members found.");
+    return;
+  }
+  
+  const emojis = await storage.loadEmojis();
+  let display = "**STAFF TEAM**\n\n";
+  
+  const roleGroups: Record<string, string[]> = {
+    owner: [],
+    admin: [],
+    mod: [],
+    support: [],
+  };
+  
+  for (const { player, role } of staffList) {
+    if (role) {
+      const name = player.displayName || player.username;
+      roleGroups[role].push(`**${name}** (*@${player.username}*)`);
+    }
+  }
+  
+  if (roleGroups.owner.length > 0) {
+    display += `${emojis.owner} **Owner**\n${roleGroups.owner.join("\n")}\n\n`;
+  }
+  if (roleGroups.admin.length > 0) {
+    display += `${emojis.admin} **Admins**\n${roleGroups.admin.join("\n")}\n\n`;
+  }
+  if (roleGroups.mod.length > 0) {
+    display += `${emojis.mod} **Moderators**\n${roleGroups.mod.join("\n")}\n\n`;
+  }
+  if (roleGroups.support.length > 0) {
+    display += `${emojis.support} **Support**\n${roleGroups.support.join("\n")}\n\n`;
+  }
+  
+  await message.channel.send(display.trim());
+}
+
+async function handlePromote(message: Message, args: string[]) {
+  const managerRole = await storage.getStaffRole(message.author.id);
+  if (!managerRole || storage.getStaffLevel(managerRole) < 3) {
+    await message.channel.send("You don't have permission to promote users.");
+    return;
+  }
+  
+  const mention = message.mentions.users.first();
+  if (!mention) {
+    await message.channel.send("Usage: ,promote @user <admin/mod/support>");
+    return;
+  }
+  
+  const roleArg = args[1]?.toLowerCase();
+  const validRoles = ["admin", "mod", "support"];
+  if (!roleArg || !validRoles.includes(roleArg)) {
+    await message.channel.send("Usage: ,promote @user <admin/mod/support>");
+    return;
+  }
+  
+  const targetRole = roleArg as storage.StaffRole;
+  
+  if (!storage.canManageRole(managerRole, targetRole)) {
+    await message.channel.send("You can't assign a role equal to or higher than your own.");
+    return;
+  }
+  
+  if (storage.isOwner(mention.id)) {
+    await message.channel.send("Cannot modify the owner's role.");
+    return;
+  }
+  
+  await storage.getOrCreatePlayer(mention.id, mention.username, mention.displayName);
+  await storage.setStaffRole(mention.id, targetRole);
+  
+  const emojis = await storage.loadEmojis();
+  const roleEmoji = emojis[targetRole] || "";
+  await message.channel.send(`${roleEmoji} **${mention.displayName || mention.username}** has been promoted to **${targetRole}**!`);
+}
+
+async function handleDemote(message: Message, _args: string[]) {
+  const managerRole = await storage.getStaffRole(message.author.id);
+  if (!managerRole || storage.getStaffLevel(managerRole) < 3) {
+    await message.channel.send("You don't have permission to demote users.");
+    return;
+  }
+  
+  const mention = message.mentions.users.first();
+  if (!mention) {
+    await message.channel.send("Usage: ,demote @user");
+    return;
+  }
+  
+  if (storage.isOwner(mention.id)) {
+    await message.channel.send("Cannot modify the owner's role.");
+    return;
+  }
+  
+  const targetRole = await storage.getStaffRole(mention.id);
+  if (!targetRole) {
+    await message.channel.send("That user is not a staff member.");
+    return;
+  }
+  
+  if (!storage.canManageRole(managerRole, targetRole)) {
+    await message.channel.send("You can't demote someone with an equal or higher role.");
+    return;
+  }
+  
+  await storage.setStaffRole(mention.id, null);
+  await message.channel.send(`**${mention.displayName || mention.username}** has been removed from staff.`);
+}
+
+async function handleResetPlayer(message: Message, args: string[]) {
+  const managerRole = await storage.getStaffRole(message.author.id);
+  if (!managerRole || storage.getStaffLevel(managerRole) < 2) {
+    await message.channel.send("You don't have permission to reset player stats.");
+    return;
+  }
+  
+  const mention = message.mentions.users.first();
+  if (!mention) {
+    await message.channel.send("Usage: ,resetplayer @user [game]");
+    return;
+  }
+  
+  const game = args[1]?.toLowerCase();
+  const validGames = ["connect4", "tictactoe", "wordduel", "wordle"];
+  
+  if (game && !validGames.includes(game)) {
+    await message.channel.send(`Invalid game. Valid games: ${validGames.join(", ")}`);
+    return;
+  }
+  
+  await storage.resetPlayerStats(mention.id, game);
+  
+  if (game) {
+    await message.channel.send(`Reset **${mention.displayName || mention.username}**'s ${game} stats.`);
+  } else {
+    await message.channel.send(`Reset all stats for **${mention.displayName || mention.username}**.`);
+  }
+}
+
+async function handleResetGame(message: Message, args: string[]) {
+  const managerRole = await storage.getStaffRole(message.author.id);
+  if (!managerRole || storage.getStaffLevel(managerRole) < 3) {
+    await message.channel.send("You don't have permission to reset game leaderboards.");
+    return;
+  }
+  
+  const game = args[0]?.toLowerCase();
+  const validGames = ["connect4", "tictactoe", "wordduel", "wordle"];
+  
+  if (!game || !validGames.includes(game)) {
+    await message.channel.send(`Usage: ,resetgame <game>\nValid games: ${validGames.join(", ")}`);
+    return;
+  }
+  
+  const count = await storage.resetGameLeaderboard(game);
+  await message.channel.send(`Reset ${game} leaderboard. ${count} entries cleared.`);
+  leaderboardCache.clear();
+}
+
+async function handleSetEmoji(message: Message, args: string[]) {
+  if (!storage.isOwner(message.author.id)) {
+    await message.channel.send("Only the owner can customize emojis.");
+    return;
+  }
+  
+  const type = args[0]?.toLowerCase();
+  const emoji = args[1];
+  
+  if (!type || !emoji) {
+    await message.channel.send("Usage: ,setemoji <type> <emoji>\nUse ,listemojis to see all types.");
+    return;
+  }
+  
+  const success = await storage.setCustomEmoji(type, emoji);
+  if (success) {
+    await message.channel.send(`Set ${type} emoji to ${emoji}`);
+  } else {
+    await message.channel.send(`Invalid emoji type: ${type}\nUse ,listemojis to see all types.`);
+  }
+}
+
+async function handleListEmojis(message: Message) {
+  const managerRole = await storage.getStaffRole(message.author.id);
+  if (!managerRole) {
+    await message.channel.send("Only staff can view emoji settings.");
+    return;
+  }
+  
+  const emojis = await storage.getAllEmojis();
+  let display = "**EMOJI SETTINGS**\n\n";
+  
+  const categories: Record<string, string[]> = {
+    "Stats": ["win", "loss", "elo", "winrate", "coin", "streak", "daily"],
+    "Ranks": ["bronze", "silver", "gold", "diamond", "champion"],
+    "Staff": ["owner", "admin", "mod", "support"],
+    "Wordle": ["correct", "wrongspot", "notinword"],
+  };
+  
+  for (const [category, types] of Object.entries(categories)) {
+    display += `**${category}:**\n`;
+    for (const type of types) {
+      const emoji = emojis[type];
+      const modified = emoji.current !== emoji.default ? " *(custom)*" : "";
+      display += `\u2800 ${type}: ${emoji.current}${modified}\n`;
+    }
+    display += "\n";
+  }
+  
+  if (storage.isOwner(message.author.id)) {
+    display += "Use `,setemoji <type> <emoji>` to change\nUse `,resetemoji <type>` to restore default";
+  }
+  
+  await message.channel.send(display);
+}
+
+async function handleResetEmoji(message: Message, args: string[]) {
+  if (!storage.isOwner(message.author.id)) {
+    await message.channel.send("Only the owner can reset emojis.");
+    return;
+  }
+  
+  const type = args[0]?.toLowerCase();
+  if (!type) {
+    await message.channel.send("Usage: ,resetemoji <type>");
+    return;
+  }
+  
+  const defaults = storage.getDefaultEmojis();
+  const success = await storage.resetCustomEmoji(type);
+  
+  if (success) {
+    await message.channel.send(`Reset ${type} emoji to default: ${defaults[type]}`);
+  } else {
+    await message.channel.send(`Invalid emoji type: ${type}`);
+  }
+}
+
 async function startPvPGame(player1Channel: TextChannel, gameType: string, player1Id: string, player2Id: string, player1Info?: {username: string, displayName?: string}, player2Info?: {username: string, displayName?: string}, player2ChannelId?: string) {
   if (player1Info) {
     await storage.getOrCreatePlayer(player1Id, player1Info.username, player1Info.displayName);
@@ -1287,6 +1529,30 @@ client.on(Events.MessageCreate, async (message: Message) => {
           break;
         case "accept":
           await handleAccept(message);
+          break;
+        case "staff":
+          await handleStaff(message);
+          break;
+        case "promote":
+          await handlePromote(message, args);
+          break;
+        case "demote":
+          await handleDemote(message, args);
+          break;
+        case "resetplayer":
+          await handleResetPlayer(message, args);
+          break;
+        case "resetgame":
+          await handleResetGame(message, args);
+          break;
+        case "setemoji":
+          await handleSetEmoji(message, args);
+          break;
+        case "listemojis":
+          await handleListEmojis(message);
+          break;
+        case "resetemoji":
+          await handleResetEmoji(message, args);
           break;
       }
     } catch (error) {
