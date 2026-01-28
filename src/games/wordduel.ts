@@ -1,12 +1,4 @@
-const WORD_LIST = [
-  "apple", "brave", "crane", "dance", "eagle", "flame", "grape", "heart", "ivory", "jewel",
-  "knife", "lemon", "music", "noble", "ocean", "pearl", "queen", "river", "stone", "tiger",
-  "unity", "voice", "water", "youth", "zebra", "angel", "beach", "cloud", "dream", "earth",
-  "forest", "golden", "happy", "island", "jungle", "knight", "leader", "magic", "nature", "orange",
-  "planet", "quiet", "rocket", "silver", "thunder", "unique", "violet", "winter", "yellow", "zenith",
-  "bridge", "castle", "dragon", "energy", "frozen", "garden", "harbor", "impact", "journey", "kitchen",
-  "legend", "memory", "nation", "oxygen", "palace", "quality", "rainbow", "shadow", "temple", "umbrella"
-];
+import { FIVE_LETTER_WORDS } from "../data/wordlist.js";
 
 export interface WordDuelState {
   player1Id: string;
@@ -30,9 +22,13 @@ function scrambleWord(word: string): string {
   return scrambled === word ? scrambleWord(word) : scrambled;
 }
 
+function getUniqueRandomWords(count: number): string[] {
+  const shuffled = [...FIVE_LETTER_WORDS].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
 export function createGameState(player1Id: string, player2Id: string): WordDuelState {
-  const shuffled = [...WORD_LIST].sort(() => Math.random() - 0.5);
-  const words = shuffled.slice(0, 5);
+  const words = getUniqueRandomWords(5);
   const scrambledWords = words.map(scrambleWord);
   
   return {
