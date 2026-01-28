@@ -333,6 +333,10 @@ export function createRematchButton(gameType: string, player1Id: string, player2
       new ButtonBuilder()
         .setCustomId(`rematch_${gameType}_${player1Id}_${player2Id}`)
         .setLabel("Rematch")
-        .setStyle(ButtonStyle.Primary)
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`gg_${player1Id}_${player2Id}`)
+        .setLabel("GG 🤝")
+        .setStyle(ButtonStyle.Secondary)
     );
 }

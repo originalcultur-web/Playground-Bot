@@ -80,6 +80,58 @@ export async function awardWinCoins(discordId: string): Promise<number> {
   return coinsToAward;
 }
 
+export async function updateDailyStreak(discordId: string): Promise<{ streak: number; isNewStreak: boolean }> {
+  const player = await getPlayer(discordId);
+  if (!player) return { streak: 0, isNewStreak: false };
+  
+  const today = new Date().toISOString().split('T')[0];
+  const lastPlayed = player.lastPlayedDate;
+  
+  if (lastPlayed === today) {
+    return { streak: player.dailyStreak, isNewStreak: false };
+  }
+  
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  
+  let newStreak: number;
+  let isNewStreak = false;
+  
+  if (lastPlayed === yesterdayStr) {
+    newStreak = player.dailyStreak + 1;
+    isNewStreak = true;
+  } else if (!lastPlayed) {
+    newStreak = 1;
+    isNewStreak = true;
+  } else {
+    newStreak = 1;
+    isNewStreak = player.dailyStreak > 0;
+  }
+  
+  await db.update(players)
+    .set({ dailyStreak: newStreak, lastPlayedDate: today })
+    .where(eq(players.discordId, discordId));
+  
+  return { streak: newStreak, isNewStreak };
+}
+
+export function getRankBadge(eloRating: number): string {
+  if (eloRating >= 1700) return "👑";
+  if (eloRating >= 1500) return "💎";
+  if (eloRating >= 1300) return "🥇";
+  if (eloRating >= 1100) return "🥈";
+  return "🥉";
+}
+
+export function getRankName(eloRating: number): string {
+  if (eloRating >= 1700) return "Champion";
+  if (eloRating >= 1500) return "Diamond";
+  if (eloRating >= 1300) return "Gold";
+  if (eloRating >= 1100) return "Silver";
+  return "Bronze";
+}
+
 export async function getOrCreateGameStats(discordId: string, game: string): Promise<GameStat> {
   const existing = await db.query.gameStats.findFirst({
     where: and(eq(gameStats.discordId, discordId), eq(gameStats.game, game)),
@@ -171,6 +223,9 @@ export async function recordPvPResult(
     duration: duration,
   });
   
+  await updateDailyStreak(winnerId);
+  await updateDailyStreak(loserId);
+  
   return { winnerChange: eloChange, loserChange: -eloChange };
 }
 
@@ -204,7 +259,7 @@ export async function recordGameResult(
   discordId: string,
   game: string,
   result: "win" | "loss" | "draw"
-): Promise<void> {
+): Promise<number> {
   const stats = await getOrCreateGameStats(discordId, game);
   const player = await getPlayer(discordId);
   
@@ -241,6 +296,15 @@ export async function recordGameResult(
       })
       .where(eq(players.discordId, discordId));
   }
+  
+  await updateDailyStreak(discordId);
+  
+  let coinsEarned = 0;
+  if (result === "win") {
+    coinsEarned = await awardWinCoins(discordId);
+  }
+  
+  return coinsEarned;
 }
 
 const PVP_GAMES = ["tictactoe", "connect4", "wordduel"];

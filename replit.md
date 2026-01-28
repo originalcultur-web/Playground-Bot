@@ -127,6 +127,13 @@ This bot is configured as an **Autoscale background worker** deployment:
 
 ## Recent Changes
 
+- **Daily Streak Counter** - Tracks consecutive days of play, displayed on profile
+- **Rank Badge System** - 5 visual tiers displayed on PvP rankings (Bronze/Silver/Gold/Diamond/Champion)
+- **Wordle Keyboard** - Shows used letters with color-coded status after each guess
+- **GG Button** - Sportsmanship button appears alongside rematch after PvP games
+- **Word Duel Countdown** - "3... 2... 1... GO!" animation before each round
+- **Coin Animations** - Delayed celebratory coin message appears after all game wins
+- **Win Emojis** - 🎉 emoji added to all win announcements
 - **Match History** - Profile now shows last 5 matches with opponent, result, and Elo change
 - **Rematch Button** - PvP games now show a rematch button after game ends
 - **Enhanced Profile** - Shows Elo ratings per game, win streaks, and equipped cosmetics

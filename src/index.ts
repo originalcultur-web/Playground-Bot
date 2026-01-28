@@ -49,6 +49,18 @@ async function getPlayerName(discordId: string): Promise<string> {
   return player?.displayName || player?.username || "Unknown";
 }
 
+async function sendCoinAnimation(channel: TextChannel, coinsEarned: number, playerId: string): Promise<void> {
+  if (coinsEarned <= 0) return;
+  
+  setTimeout(async () => {
+    try {
+      await channel.send(`<@${playerId}> earned **+${coinsEarned}** 🪙`);
+    } catch (e) {
+      // Ignore if channel is unavailable
+    }
+  }, 1500);
+}
+
 async function sendToGameChannels(game: any, messageOptions: any) {
   const channels: TextChannel[] = [];
   
@@ -172,6 +184,9 @@ async function handleProfile(message: Message, args: string[]) {
   if (targetId === message.author.id) {
     profile += `  💰 ${player.coins}`;
   }
+  if (player.dailyStreak && player.dailyStreak > 0) {
+    profile += `  🔥 ${player.dailyStreak} day streak`;
+  }
   profile += `\n\n`;
   
   const pvpGames = ["tictactoe", "connect4", "wordduel"];
@@ -188,8 +203,10 @@ async function handleProfile(message: Message, args: string[]) {
   for (const game of pvpGames) {
     const stats = await storage.getOrCreateGameStats(targetId, game);
     if (stats.wins > 0 || stats.losses > 0) {
+      const rankBadge = storage.getRankBadge(stats.eloRating);
+      const rankName = storage.getRankName(stats.eloRating);
       const streakText = stats.winStreak > 0 ? ` 🔥${stats.winStreak}` : "";
-      profile += `${gameLabels[game]}: ⭐${stats.eloRating} (${stats.wins}W/${stats.losses}L)${streakText}\n`;
+      profile += `${rankBadge} ${gameLabels[game]}: ${rankName} ⭐${stats.eloRating} (${stats.wins}W/${stats.losses}L)${streakText}\n`;
     }
   }
   
@@ -206,9 +223,9 @@ async function handleProfile(message: Message, args: string[]) {
   if (matches.length > 0) {
     profile += `\n**Recent Matches**\n`;
     for (const match of matches) {
-      const resultIcon = match.result === "win" ? "W" : "L";
-      const eloText = match.eloChange > 0 ? `+${match.eloChange}` : `${match.eloChange}`;
-      profile += `${resultIcon} vs ${match.opponentName} (${gameLabels[match.gameType] || match.gameType}) ${eloText}\n`;
+      const resultIcon = match.result === "win" ? "✅" : match.result === "draw" ? "🤝" : "❌";
+      const eloText = match.eloChange > 0 ? `+${match.eloChange} ⭐` : `${match.eloChange} ⭐`;
+      profile += `${resultIcon} **${match.opponentName}** (${gameLabels[match.gameType] || match.gameType}) ${eloText}\n`;
     }
   }
   
@@ -419,7 +436,7 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
     content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${player1Name}**'s turn\n`;
   } else if (gameType === "wordduel") {
     const scrambled = state.scrambledWords[0].toUpperCase();
-    content = `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\nUnscramble: **${scrambled}**\nType your answer!`;
+    content = `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**\nType your answer!`;
   }
   
   const messageOptions = gameType === "wordduel" ? { content } : { content, components: buttons };
@@ -739,9 +756,13 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
           const winnerName = await getPlayerName(winnerId);
           const loserName = await getPlayerName(loserId);
           const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
-          await storage.awardWinCoins(winnerId);
+          const coinsEarned = await storage.awardWinCoins(winnerId);
           eloText = ` (+${winnerChange})`;
           clearLeaderboardCache("tictactoe");
+          
+          if (coinsEarned > 0 && interaction.channel) {
+            sendCoinAnimation(interaction.channel as TextChannel, coinsEarned, winnerId);
+          }
         }
         
         clearGameTimer(game.id);
@@ -752,7 +773,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
         buttons.push(rematchBtn);
         const scoreText = state.maxRounds > 1 ? `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
-        const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n**${winnerName}** wins the match!${eloText}`;
+        const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🎉 **${winnerName}** wins the match!${eloText}`;
         
         await interaction.deferUpdate();
         await syncGameMessages(game, content, buttons);
@@ -852,8 +873,12 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const winnerName = await getPlayerName(winnerId);
       const loserName = await getPlayerName(loserId);
       const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
-      await storage.awardWinCoins(winnerId);
+      const coinsEarned = await storage.awardWinCoins(winnerId);
       clearLeaderboardCache("connect4");
+      
+      if (coinsEarned > 0 && interaction.channel) {
+        sendCoinAnimation(interaction.channel as TextChannel, coinsEarned, winnerId);
+      }
       
       clearGameTimer(game.id);
       await storage.endGame(game.id);
@@ -861,7 +886,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const buttons = ui.createConnect4Board(state, game.id, true);
       const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
       buttons.push(rematchBtn);
-      const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\n**${winnerName}** wins! (+${winnerChange})`;
+      const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins! (+${winnerChange})`;
       
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
@@ -956,9 +981,13 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     
     if (state.gameOver) {
       const result = state.won ? "win" : "loss";
-      await storage.recordGameResult(state.playerId, "minesweeper", result);
+      const coinsEarned = await storage.recordGameResult(state.playerId, "minesweeper", result);
       clearLeaderboardCache("minesweeper");
       await storage.endGame(game.id);
+      
+      if (state.won && coinsEarned > 0 && interaction.channel) {
+        sendCoinAnimation(interaction.channel as TextChannel, coinsEarned, state.playerId);
+      }
     }
     
     const buttons = ui.createMinesweeperBoard(state, game.id);
@@ -968,7 +997,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     if (state.gameOver) {
       if (state.won) {
         const time = Math.floor((state.endTime - state.startTime) / 1000);
-        statusText = `You won! Time: ${time}s`;
+        statusText = `🎉 You won! Time: ${time}s`;
       } else {
         statusText = "Game Over! You hit a mine.";
       }
@@ -1076,6 +1105,24 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       content: `**${challengerName}** wants a rematch in ${gameNames[gameType] || gameType}!\n<@${opponentId}>, type \`,accept\` to accept.`
     });
   }
+  
+  else if (customId.startsWith("gg_")) {
+    const parts = customId.split("_");
+    const player1Id = parts[1];
+    const player2Id = parts[2];
+    
+    if (userId !== player1Id && userId !== player2Id) {
+      await interaction.reply({ content: "You weren't in this game.", ephemeral: true });
+      return;
+    }
+    
+    const opponentId = userId === player1Id ? player2Id : player1Id;
+    const senderName = await getPlayerName(userId);
+    
+    await interaction.reply({
+      content: `**${senderName}** says GG! 🤝 <@${opponentId}>`
+    });
+  }
 }
 
 function revealMinesweeperCell(state: any, row: number, col: number): void {
@@ -1147,16 +1194,20 @@ async function handleTextGameInput(message: Message) {
           const winnerName = await getPlayerName(winner);
           const loserName = await getPlayerName(loserId);
           const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
-          await storage.awardWinCoins(winner);
+          const coinsEarned = await storage.awardWinCoins(winner);
           eloText = ` (+${winnerChange})`;
           clearLeaderboardCache("wordduel");
+          
+          if (coinsEarned > 0) {
+            sendCoinAnimation(message.channel as TextChannel, coinsEarned, winner);
+          }
         }
         
         clearGameTimer(game.id);
         await storage.endGame(game.id);
         
         const winnerName = winner ? await getPlayerName(winner) : null;
-        const resultText = winnerName ? `**${winnerName}** wins!${eloText}` : "It's a draw!";
+        const resultText = winnerName ? `🎉 **${winnerName}** wins!${eloText}` : "It's a draw!";
         const rematchBtn = ui.createRematchButton("wordduel", state.player1Id, state.player2Id);
         await message.channel.send({
           content: `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
@@ -1167,7 +1218,7 @@ async function handleTextGameInput(message: Message) {
       
       const previousWord = state.words[state.currentWordIndex - 1];
       const scrambled = state.scrambledWords[state.currentWordIndex].toUpperCase();
-      await message.channel.send(`**${playerName}** got it! The word was: **${previousWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\nUnscramble: **${scrambled}**`);
+      await message.channel.send(`**${playerName}** got it! The word was: **${previousWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**`);
       resetGameTimer(game.id, message.channel as TextChannel);
     }
   }
@@ -1183,9 +1234,13 @@ async function handleTextGameInput(message: Message) {
         
         if (state.gameOver) {
           const result = state.won ? "win" : "loss";
-          await storage.recordGameResult(state.playerId, "wordle", result);
+          const coinsEarned = await storage.recordGameResult(state.playerId, "wordle", result);
           clearLeaderboardCache("wordle");
           await storage.endGame(game.id);
+          
+          if (state.won && coinsEarned > 0) {
+            sendCoinAnimation(message.channel as TextChannel, coinsEarned, state.playerId);
+          }
         }
         
         const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬛ = Letter not in word`;
@@ -1200,12 +1255,16 @@ async function handleTextGameInput(message: Message) {
         }
         display += `\nGuesses: ${state.guesses.length}/${state.maxGuesses}`;
         
+        if (state.guesses.length > 0 && !state.gameOver) {
+          display += "\n\n**Keyboard:**\n" + buildWordleKeyboard(state.guesses, state.targetWord);
+        }
+        
         if (state.gameOver) {
           if (state.won) {
             const time = Math.floor((state.endTime - state.startTime) / 1000);
-            display += `\n\nYou won in ${state.guesses.length} guess${state.guesses.length > 1 ? 'es' : ''}! Time: ${time}s`;
+            display += `\n\n🎉 You won in ${state.guesses.length} guess${state.guesses.length > 1 ? 'es' : ''}! Time: ${time}s`;
           } else {
-            display += `\n\nGame over! The word was: **${state.targetWord.toUpperCase()}**`;
+            display += `\n\n😔 Game over! The word was: **${state.targetWord.toUpperCase()}**`;
           }
         } else {
           display += "\nType a 5-letter word to guess!";
@@ -1217,6 +1276,45 @@ async function handleTextGameInput(message: Message) {
       }
     }
   }
+}
+
+function buildWordleKeyboard(guesses: string[], targetWord: string): string {
+  const letterStatus: Record<string, string> = {};
+  
+  for (const guess of guesses) {
+    for (let i = 0; i < 5; i++) {
+      const letter = guess[i];
+      if (targetWord[i] === letter) {
+        letterStatus[letter] = "🟩";
+      } else if (targetWord.includes(letter)) {
+        if (letterStatus[letter] !== "🟩") {
+          letterStatus[letter] = "🟨";
+        }
+      } else {
+        if (!letterStatus[letter]) {
+          letterStatus[letter] = "⬛";
+        }
+      }
+    }
+  }
+  
+  const rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+  let keyboard = "";
+  
+  for (const row of rows) {
+    let rowDisplay = "";
+    for (const letter of row) {
+      const status = letterStatus[letter];
+      if (status) {
+        rowDisplay += `${status}${letter.toUpperCase()} `;
+      } else {
+        rowDisplay += `⬜${letter.toUpperCase()} `;
+      }
+    }
+    keyboard += rowDisplay.trim() + "\n";
+  }
+  
+  return keyboard;
 }
 
 function evaluateWordleGuess(targetWord: string, guess: string): string[] {
@@ -1313,7 +1411,7 @@ function startGameTimer(gameId: string, channel: TextChannel) {
       // Continue to next round
       const scrambled = state.scrambledWords[state.currentWordIndex].toUpperCase();
       await sendToGameChannels(game, { 
-        content: `Time's up! The word was: **${currentWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\nUnscramble: **${scrambled}**` 
+        content: `Time's up! The word was: **${currentWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**` 
       });
       gameTimers.delete(gameId);
       startGameTimer(gameId, channel);
