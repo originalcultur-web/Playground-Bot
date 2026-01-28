@@ -249,10 +249,10 @@ async function handleLeaderboard(message: Message, args: string[]) {
       
       if (isPvP) {
         display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-        display += `   ⭐ ${stat.eloRating}  🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
+        display += `   ⭐ ${stat.eloRating}  🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n\n`;
       } else {
         display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-        display += `   🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
+        display += `   🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n\n`;
       }
     }
   }
