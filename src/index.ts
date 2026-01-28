@@ -1035,13 +1035,13 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const challengerId = userId;
     const channelId = interaction.channelId;
     
-    const existingGame = await storage.getActiveGameForPlayer(challengerId);
+    const existingGame = await storage.getActiveGame(challengerId);
     if (existingGame) {
       await interaction.reply({ content: "You're already in a game!", ephemeral: true });
       return;
     }
     
-    const opponentGame = await storage.getActiveGameForPlayer(opponentId);
+    const opponentGame = await storage.getActiveGame(opponentId);
     if (opponentGame) {
       await interaction.reply({ content: "Your opponent is in another game.", ephemeral: true });
       return;
