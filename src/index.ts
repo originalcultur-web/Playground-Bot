@@ -1279,42 +1279,65 @@ async function handleTextGameInput(message: Message) {
 }
 
 function buildWordleKeyboard(guesses: string[], targetWord: string): string {
-  const letterStatus: Record<string, string> = {};
+  // Track best status for each letter: 2=correct, 1=wrong spot, 0=not in word
+  const letterBestStatus: Record<string, number> = {};
+  const allLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
   
+  // Evaluate each guess using proper Wordle rules (letter counts)
   for (const guess of guesses) {
+    const colors = evaluateWordleGuess(targetWord, guess);
+    
     for (let i = 0; i < 5; i++) {
-      const letter = guess[i];
-      if (targetWord[i] === letter) {
-        letterStatus[letter] = "🟩";
-      } else if (targetWord.includes(letter)) {
-        if (letterStatus[letter] !== "🟩") {
-          letterStatus[letter] = "🟨";
-        }
-      } else {
-        if (!letterStatus[letter]) {
-          letterStatus[letter] = "⬛";
-        }
+      const letter = guess[i].toUpperCase();
+      let status = 0; // not in word (gray)
+      
+      if (colors[i] === "🟩") {
+        status = 2; // correct position
+      } else if (colors[i] === "🟨") {
+        status = 1; // wrong spot
+      }
+      
+      // Keep the best status (higher = better)
+      if (letterBestStatus[letter] === undefined || status > letterBestStatus[letter]) {
+        letterBestStatus[letter] = status;
       }
     }
   }
   
-  const rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+  // Group letters by their best status
+  const correct: string[] = [];
+  const wrongSpot: string[] = [];
+  const notInWord: string[] = [];
+  const unused: string[] = [];
+  
+  for (const letter of allLetters) {
+    const status = letterBestStatus[letter];
+    if (status === 2) {
+      correct.push(letter);
+    } else if (status === 1) {
+      wrongSpot.push(letter);
+    } else if (status === 0) {
+      notInWord.push(letter);
+    } else {
+      unused.push(letter);
+    }
+  }
+  
   let keyboard = "";
-  
-  for (const row of rows) {
-    let rowDisplay = "";
-    for (const letter of row) {
-      const status = letterStatus[letter];
-      if (status) {
-        rowDisplay += `${status}${letter.toUpperCase()} `;
-      } else {
-        rowDisplay += `⬜${letter.toUpperCase()} `;
-      }
-    }
-    keyboard += rowDisplay.trim() + "\n";
+  if (correct.length > 0) {
+    keyboard += `✅ Correct: ${correct.join(" ")}\n`;
+  }
+  if (wrongSpot.length > 0) {
+    keyboard += `🟡 Wrong spot: ${wrongSpot.join(" ")}\n`;
+  }
+  if (notInWord.length > 0) {
+    keyboard += `❌ Not in word: ${notInWord.join(" ")}\n`;
+  }
+  if (unused.length > 0) {
+    keyboard += `⬜ Unused: ${unused.join(" ")}`;
   }
   
-  return keyboard;
+  return keyboard.trim();
 }
 
 function evaluateWordleGuess(targetWord: string, guess: string): string[] {
