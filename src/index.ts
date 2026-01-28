@@ -711,7 +711,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         
         const winnerName = await getPlayerName(winnerId);
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
-        const rematchBtn = ui.createRematchButton("tictactoe", loserId);
+        const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
         buttons.push(rematchBtn);
         const scoreText = state.maxRounds > 1 ? `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
         const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🏆 **${winnerName}** wins the match!${eloText}`;
@@ -741,7 +741,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         await storage.endGame(game.id);
         
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
-        const rematchBtn = ui.createRematchButton("tictactoe", state.player2Id);
+        const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
         buttons.push(rematchBtn);
         const scoreText = `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
         const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🤝 Match ended in a draw!`;
@@ -820,9 +820,8 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       clearGameTimer(game.id);
       await storage.endGame(game.id);
       
-      const winnerName = await getPlayerName(winnerId);
       const buttons = ui.createConnect4Board(state, game.id, true);
-      const rematchBtn = ui.createRematchButton("connect4", loserId);
+      const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
       buttons.push(rematchBtn);
       const content = `**CONNECT 4**\n\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🏆 **${winnerName}** wins! (+${winnerChange} ⭐)`;
       
@@ -836,7 +835,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.endGame(game.id);
       
       const buttons = ui.createConnect4Board(state, game.id, true);
-      const rematchBtn = ui.createRematchButton("connect4", state.player2Id);
+      const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
       buttons.push(rematchBtn);
       const content = `**CONNECT 4**\n\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🤝 It's a draw!`;
       
@@ -996,8 +995,15 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
   else if (customId.startsWith("rematch_")) {
     const parts = customId.split("_");
     const gameType = parts[1];
-    const opponentId = parts[2];
+    const player1Id = parts[2];
+    const player2Id = parts[3];
     
+    if (userId !== player1Id && userId !== player2Id) {
+      await interaction.reply({ content: "You weren't in this game.", ephemeral: true });
+      return;
+    }
+    
+    const opponentId = userId === player1Id ? player2Id : player1Id;
     const challengerId = userId;
     const channelId = interaction.channelId;
     
@@ -1113,7 +1119,11 @@ async function handleTextGameInput(message: Message) {
         
         const winnerName = winner ? await getPlayerName(winner) : null;
         const resultText = winnerName ? `🏆 **${winnerName}** wins!${eloText}` : "🤝 It's a draw!";
-        await message.channel.send(`**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`);
+        const rematchBtn = ui.createRematchButton("wordduel", state.player1Id, state.player2Id);
+        await message.channel.send({
+          content: `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
+          components: [rematchBtn]
+        });
         return;
       }
       

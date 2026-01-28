@@ -327,11 +327,11 @@ export function createQuitButton(gameId: string) {
     );
 }
 
-export function createRematchButton(gameType: string, opponentId: string) {
+export function createRematchButton(gameType: string, player1Id: string, player2Id: string) {
   return new ActionRowBuilder<ButtonBuilder>()
     .addComponents(
       new ButtonBuilder()
-        .setCustomId(`rematch_${gameType}_${opponentId}`)
+        .setCustomId(`rematch_${gameType}_${player1Id}_${player2Id}`)
         .setLabel("Rematch")
         .setStyle(ButtonStyle.Primary)
     );
