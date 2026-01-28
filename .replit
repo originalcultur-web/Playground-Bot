@@ -31,7 +31,7 @@ args = "npm run start"
 waitForPort = 5000
 
 [deployment]
-deploymentTarget = "cloudrun"
+deploymentTarget = "vm"
 run = ["npm", "run", "start"]
 
 [[ports]]
