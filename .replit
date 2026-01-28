@@ -23,11 +23,12 @@ name = "Playground Bot"
 author = "agent"
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npm run start"
+waitForPort = 5000
 
 [deployment]
 deploymentTarget = "autoscale"
