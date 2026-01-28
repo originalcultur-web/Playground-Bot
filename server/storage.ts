@@ -327,6 +327,11 @@ export async function findMatch(discordId: string, gameType: string, rankRange: 
   
   for (const candidate of candidates) {
     if (Math.abs(candidate.rankScore - playerStats.rankScore) <= rankRange) {
+      const existingGame = await getActiveGame(candidate.discordId);
+      if (existingGame) {
+        await removeFromQueue(candidate.discordId);
+        continue;
+      }
       return { discordId: candidate.discordId, channelId: candidate.channelId };
     }
   }
