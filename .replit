@@ -30,5 +30,9 @@ args = "npm run start"
 outputType = "console"
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "autoscale"
 run = ["npm", "run", "start"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import http from "http";
 import { 
   Client, 
   GatewayIntentBits, 
@@ -15,6 +16,15 @@ import * as wordduel from "./games/wordduel.js";
 import * as minesweeper from "./games/minesweeper.js";
 import * as wordle from "./games/wordle.js";
 import * as ui from "./ui/gameComponents.js";
+
+// Health check server for deployment
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Playground Bot is running!");
+});
+server.listen(5000, "0.0.0.0", () => {
+  console.log("Health check server running on port 5000");
+});
 
 const PREFIX = ",";
 const AFK_TIMEOUT = 60000;
