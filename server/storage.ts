@@ -10,11 +10,39 @@ import {
   pendingChallenges,
   shopItems,
   userInventory,
+  customEmojis,
   type Player,
   type GameStat,
   type ActiveGame,
   type ShopItem,
+  type CustomEmoji,
 } from "#shared/schema.js";
+
+const OWNER_DISCORD_ID = "599479092076609547";
+
+export type StaffRole = "owner" | "admin" | "mod" | "support" | null;
+
+const STAFF_HIERARCHY: Record<string, number> = {
+  owner: 4,
+  admin: 3,
+  mod: 2,
+  support: 1,
+};
+
+export function getStaffLevel(role: StaffRole): number {
+  if (!role) return 0;
+  return STAFF_HIERARCHY[role] || 0;
+}
+
+export function isOwner(discordId: string): boolean {
+  return discordId === OWNER_DISCORD_ID;
+}
+
+export function canManageRole(managerRole: StaffRole, targetRole: StaffRole): boolean {
+  const managerLevel = getStaffLevel(managerRole);
+  const targetLevel = getStaffLevel(targetRole);
+  return managerLevel > targetLevel;
+}
 
 const DAILY_COIN_CAP = 50;
 const COINS_PER_WIN = 5;
@@ -655,4 +683,162 @@ export async function seedShopItems(): Promise<void> {
   for (const item of items) {
     await db.insert(shopItems).values(item);
   }
+}
+
+export async function getStaffRole(discordId: string): Promise<StaffRole> {
+  if (isOwner(discordId)) return "owner";
+  
+  const player = await getPlayer(discordId);
+  if (!player || !player.staffRole) return null;
+  return player.staffRole as StaffRole;
+}
+
+export async function setStaffRole(discordId: string, role: StaffRole): Promise<boolean> {
+  if (isOwner(discordId)) return false;
+  
+  await db.update(players)
+    .set({ staffRole: role })
+    .where(eq(players.discordId, discordId));
+  return true;
+}
+
+export async function getAllStaff(): Promise<Array<{ player: Player; role: StaffRole }>> {
+  const staffPlayers = await db.query.players.findMany({
+    where: sql`${players.staffRole} IS NOT NULL`,
+  });
+  
+  const result: Array<{ player: Player; role: StaffRole }> = [];
+  
+  const owner = await db.query.players.findFirst({
+    where: eq(players.discordId, OWNER_DISCORD_ID),
+  });
+  if (owner) {
+    result.push({ player: owner, role: "owner" });
+  }
+  
+  for (const p of staffPlayers) {
+    if (p.discordId !== OWNER_DISCORD_ID && p.staffRole) {
+      result.push({ player: p, role: p.staffRole as StaffRole });
+    }
+  }
+  
+  result.sort((a, b) => getStaffLevel(b.role) - getStaffLevel(a.role));
+  return result;
+}
+
+export async function resetPlayerStats(discordId: string, game?: string): Promise<boolean> {
+  if (game) {
+    await db.delete(gameStats)
+      .where(and(eq(gameStats.discordId, discordId), eq(gameStats.game, game)));
+    await db.delete(matchHistory)
+      .where(and(eq(matchHistory.player1Id, discordId), eq(matchHistory.gameType, game)));
+    await db.delete(matchHistory)
+      .where(and(eq(matchHistory.player2Id, discordId), eq(matchHistory.gameType, game)));
+  } else {
+    await db.delete(gameStats).where(eq(gameStats.discordId, discordId));
+    await db.delete(matchHistory).where(eq(matchHistory.player1Id, discordId));
+    await db.delete(matchHistory).where(eq(matchHistory.player2Id, discordId));
+    await db.update(players)
+      .set({ 
+        coins: 0, 
+        coinsEarnedToday: 0, 
+        totalWins: 0, 
+        totalLosses: 0,
+        dailyStreak: 0
+      })
+      .where(eq(players.discordId, discordId));
+  }
+  return true;
+}
+
+export async function resetGameLeaderboard(game: string): Promise<number> {
+  const result = await db.delete(gameStats).where(eq(gameStats.game, game));
+  await db.delete(matchHistory).where(eq(matchHistory.gameType, game));
+  return result.rowCount || 0;
+}
+
+const DEFAULT_EMOJIS: Record<string, string> = {
+  win: "🏆",
+  loss: "💀",
+  elo: "⭐",
+  winrate: "📈",
+  coin: "🪙",
+  streak: "🔥",
+  daily: "📅",
+  bronze: "🥉",
+  silver: "🥈",
+  gold: "🥇",
+  diamond: "💎",
+  champion: "👑",
+  owner: "👑",
+  admin: "⚔️",
+  mod: "🛡️",
+  support: "💬",
+  correct: "✅",
+  wrongspot: "🟡",
+  notinword: "❌",
+};
+
+let emojiCache: Record<string, string> | null = null;
+
+export async function loadEmojis(): Promise<Record<string, string>> {
+  if (emojiCache) return emojiCache;
+  
+  const customEmojiList = await db.query.customEmojis.findMany();
+  const emojis = { ...DEFAULT_EMOJIS };
+  
+  for (const custom of customEmojiList) {
+    emojis[custom.emojiType] = custom.emoji;
+  }
+  
+  emojiCache = emojis;
+  return emojis;
+}
+
+export function getEmoji(type: string): string {
+  if (emojiCache && emojiCache[type]) return emojiCache[type];
+  return DEFAULT_EMOJIS[type] || "❓";
+}
+
+export async function setCustomEmoji(type: string, emoji: string): Promise<boolean> {
+  if (!DEFAULT_EMOJIS[type]) return false;
+  
+  await db.insert(customEmojis)
+    .values({ emojiType: type, emoji })
+    .onConflictDoUpdate({
+      target: customEmojis.emojiType,
+      set: { emoji, updatedAt: new Date() },
+    });
+  
+  emojiCache = null;
+  await loadEmojis();
+  return true;
+}
+
+export async function resetCustomEmoji(type: string): Promise<boolean> {
+  if (!DEFAULT_EMOJIS[type]) return false;
+  
+  await db.delete(customEmojis).where(eq(customEmojis.emojiType, type));
+  
+  emojiCache = null;
+  await loadEmojis();
+  return true;
+}
+
+export async function getAllEmojis(): Promise<Record<string, { current: string; default: string }>> {
+  const emojis = await loadEmojis();
+  const result: Record<string, { current: string; default: string }> = {};
+  
+  for (const [type, defaultEmoji] of Object.entries(DEFAULT_EMOJIS)) {
+    result[type] = {
+      current: emojis[type] || defaultEmoji,
+      default: defaultEmoji,
+    };
+  }
+  
+  return result;
+}
+
+export function getDefaultEmojis(): Record<string, string> {
+  return { ...DEFAULT_EMOJIS };
 }
