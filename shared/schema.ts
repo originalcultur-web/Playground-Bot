@@ -18,7 +18,15 @@ export const players = pgTable("players", {
   forfeitCount: integer("forfeit_count").notNull().default(0),
   lastForfeitTime: timestamp("last_forfeit_time"),
   queueLockedUntil: timestamp("queue_locked_until"),
+  staffRole: text("staff_role"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const customEmojis = pgTable("custom_emojis", {
+  id: serial("id").primaryKey(),
+  emojiType: text("emoji_type").notNull().unique(),
+  emoji: text("emoji").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const gameStats = pgTable("game_stats", {
@@ -122,3 +130,4 @@ export type InsertActiveGame = typeof activeGames.$inferInsert;
 export type ShopItem = typeof shopItems.$inferSelect;
 export type InsertShopItem = typeof shopItems.$inferInsert;
 export type UserInventoryItem = typeof userInventory.$inferSelect;
+export type CustomEmoji = typeof customEmojis.$inferSelect;
