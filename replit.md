@@ -118,6 +118,13 @@ npm run start      # Start the bot
 npm run db:push    # Push database schema
 ```
 
+## Deployment
+
+This bot is configured as an **Autoscale background worker** deployment:
+- No HTTP server or port listening required
+- Runs continuously to maintain Discord connection
+- Ideal for Discord bots that need persistent connections
+
 ## Recent Changes
 
 - **Match History** - Profile now shows last 5 matches with opponent, result, and Elo change
