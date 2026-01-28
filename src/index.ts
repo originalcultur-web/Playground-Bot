@@ -337,11 +337,11 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
   if (gameType === "tictactoe") {
     buttons = ui.createTicTacToeBoard(state, game.id);
     const scoreText = state.maxRounds > 1 ? `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
-    content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${player1Name}**'s turn`;
+    content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${player1Name}**'s turn\n`;
   } else if (gameType === "connect4") {
     buttons = ui.createConnect4Board(state, game.id);
     const display = ui.createConnect4Display(state);
-    content = `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${player1Name}**'s turn`;
+    content = `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${player1Name}**'s turn\n`;
   } else if (gameType === "wordduel") {
     const scrambled = state.scrambledWords[0].toUpperCase();
     content = `⚔️ **WORD DUEL**\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\nUnscramble: **${scrambled}**\nType your answer!`;
@@ -407,7 +407,7 @@ async function handleGameCommand(message: Message, gameType: string) {
   }
   
   await storage.addToQueue(playerId, gameType, message.channel.id);
-  await message.channel.send(`🔍 Looking for a **${gameType.toUpperCase()}** opponent... (type \`,quit\` to cancel)`);
+  const searchingMsg = await message.channel.send(`🔍 Looking for a **${gameType.toUpperCase()}** opponent... (type \`,quit\` to cancel)`);
   
   let attempts = 0;
   const findOpponent = async () => {
@@ -422,6 +422,8 @@ async function handleGameCommand(message: Message, gameType: string) {
       await storage.removeFromQueue(match.discordId);
       matchmakingTimers.delete(playerId);
       
+      try { await searchingMsg.delete(); } catch (e) {}
+      
       const channel = message.channel as TextChannel;
       const player1Info = { username: message.author.username, displayName: message.author.displayName };
       const matchPlayer = await storage.getPlayer(match.discordId);
@@ -432,6 +434,7 @@ async function handleGameCommand(message: Message, gameType: string) {
     } else {
       await storage.removeFromQueue(playerId);
       matchmakingTimers.delete(playerId);
+      try { await searchingMsg.delete(); } catch (e) {}
       await message.channel.send("No opponent found. Try again later or challenge someone directly.");
     }
   };
@@ -485,7 +488,7 @@ async function handleSoloGame(message: Message, gameType: string) {
     const buttons = ui.createMinesweeperBoard(state, game.id);
     
     sentMessage = await message.channel.send({
-      content: `💣 **MINESWEEPER**\nClick cells to reveal`,
+      content: `💣 **MINESWEEPER**\n5 mines hidden | 🔍 Reveal mode\n\nClick cells to reveal. Toggle flag mode to mark mines.\n`,
       components: buttons
     });
     
@@ -496,8 +499,9 @@ async function handleSoloGame(message: Message, gameType: string) {
     state = wordle.createGameState(playerId);
     const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
     
+    const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬜ = Letter not in word`;
     sentMessage = await message.channel.send({
-      content: `📝 **WORDLE**\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n\nGuesses: 0/6\nType a 5-letter word to guess!`
+      content: `📝 **WORDLE**\n${wordleGuide}\n\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n\nGuesses: 0/6\nType a 5-letter word to guess!`
     });
     
     if (sentMessage) {
@@ -785,10 +789,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     await storage.updateGameState(game.id, state);
     
     const buttons = ui.createMinesweeperBoard(state, game.id);
+    const flagCount = state.flagged.flat().filter((f: boolean) => f).length;
     const modeText = state.flagMode ? "🚩 Flag mode - click to place/remove flags" : "🔍 Reveal mode - click to reveal cells";
     
     await interaction.update({
-      content: `💣 **MINESWEEPER**\n${modeText}`,
+      content: `💣 **MINESWEEPER**\n5 mines hidden | Flags: ${flagCount}/5 | ${modeText}\n`,
       components: buttons
     });
   }
@@ -829,19 +834,23 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     }
     
     const buttons = ui.createMinesweeperBoard(state, game.id);
-    let statusText = state.flagMode ? "🚩 Flag mode - click to place/remove flags" : "🔍 Reveal mode - click to reveal cells";
+    const flagCount = state.flagged.flat().filter((f: boolean) => f).length;
+    let statusText: string;
     
     if (state.gameOver) {
       if (state.won) {
         const time = Math.floor((state.endTime - state.startTime) / 1000);
-        statusText = `You won! Time: ${time}s`;
+        statusText = `🎉 You won! Time: ${time}s`;
       } else {
-        statusText = "Game Over! You hit a mine.";
+        statusText = "💥 Game Over! You hit a mine.";
       }
+    } else {
+      const modeText = state.flagMode ? "🚩 Flag mode" : "🔍 Reveal mode";
+      statusText = `5 mines hidden | Flags: ${flagCount}/5 | ${modeText}`;
     }
     
     await interaction.update({
-      content: `💣 **MINESWEEPER**\n${statusText}`,
+      content: `💣 **MINESWEEPER**\n${statusText}\n`,
       components: buttons
     });
   }
@@ -985,7 +994,8 @@ async function handleTextGameInput(message: Message) {
           await storage.endGame(game.id);
         }
         
-        let display = "📝 **WORDLE**\n";
+        const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬜ = Letter not in word`;
+        let display = `📝 **WORDLE**\n${wordleGuide}\n\n`;
         for (const guess of state.guesses) {
           const colors = evaluateWordleGuess(state.targetWord, guess);
           display += colors.join("") + " **" + guess.toUpperCase() + "**\n";
