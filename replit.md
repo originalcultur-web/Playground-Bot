@@ -130,7 +130,8 @@ This bot is configured as an **Autoscale background worker** deployment:
 - **Match History** - Profile now shows last 5 matches with opponent, result, and Elo change
 - **Rematch Button** - PvP games now show a rematch button after game ends
 - **Enhanced Profile** - Shows Elo ratings per game, win streaks, and equipped cosmetics
-- **Wordle Dictionary** - 800+ valid English words with validation
+- **Word Lists** - 5,000 unique 5-letter words for Wordle and Word Duel
+- **Wordle Key Guide** - Fixed guide to correctly show ⬛ (black) for letters not in word
 - **Elo Rating System** - PvP games now use Elo-based ranking
 - Rating changes displayed after matches (+N ⭐)
 - Leaderboard display updated with emoji icons and compact format

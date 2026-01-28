@@ -602,7 +602,7 @@ async function handleSoloGame(message: Message, gameType: string) {
     state = wordle.createGameState(playerId);
     const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
     
-    const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬜ = Letter not in word`;
+    const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬛ = Letter not in word`;
     sentMessage = await message.channel.send({
       content: `**WORDLE**\n\n${wordleGuide}\n\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n\nGuesses: 0/6\nType a 5-letter word to guess!`
     });
@@ -1188,7 +1188,7 @@ async function handleTextGameInput(message: Message) {
           await storage.endGame(game.id);
         }
         
-        const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬜ = Letter not in word`;
+        const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬛ = Letter not in word`;
         let display = `**WORDLE**\n\n${wordleGuide}\n\n`;
         for (const guess of state.guesses) {
           const colors = evaluateWordleGuess(state.targetWord, guess);
