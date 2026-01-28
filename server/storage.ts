@@ -93,6 +93,71 @@ export async function getOrCreateGameStats(discordId: string, game: string): Pro
   return newStats;
 }
 
+function calculateEloChange(winnerElo: number, loserElo: number): number {
+  const K = 32;
+  const expectedWinner = 1 / (1 + Math.pow(10, (loserElo - winnerElo) / 400));
+  return Math.round(K * (1 - expectedWinner));
+}
+
+export async function recordPvPResult(
+  winnerId: string,
+  loserId: string,
+  game: string
+): Promise<{ winnerChange: number; loserChange: number }> {
+  const winnerStats = await getOrCreateGameStats(winnerId, game);
+  const loserStats = await getOrCreateGameStats(loserId, game);
+  const winnerPlayer = await getPlayer(winnerId);
+  const loserPlayer = await getPlayer(loserId);
+  
+  const eloChange = calculateEloChange(winnerStats.eloRating, loserStats.eloRating);
+  
+  const winnerWins = winnerStats.wins + 1;
+  const winnerWinStreak = winnerStats.winStreak + 1;
+  const winnerBestStreak = Math.max(winnerStats.bestStreak, winnerWinStreak);
+  const winnerTotalGames = winnerWins + winnerStats.losses;
+  const winnerWinRate = winnerTotalGames > 0 ? (winnerWins / winnerTotalGames) * 100 : 0;
+  const winnerNewElo = winnerStats.eloRating + eloChange;
+  
+  await db.update(gameStats)
+    .set({ 
+      wins: winnerWins, 
+      winStreak: winnerWinStreak, 
+      bestStreak: winnerBestStreak, 
+      winRate: winnerWinRate,
+      eloRating: winnerNewElo,
+      rankScore: winnerNewElo
+    })
+    .where(and(eq(gameStats.discordId, winnerId), eq(gameStats.game, game)));
+  
+  const loserLosses = loserStats.losses + 1;
+  const loserTotalGames = loserStats.wins + loserLosses;
+  const loserWinRate = loserTotalGames > 0 ? (loserStats.wins / loserTotalGames) * 100 : 0;
+  const loserNewElo = Math.max(100, loserStats.eloRating - eloChange);
+  
+  await db.update(gameStats)
+    .set({ 
+      losses: loserLosses, 
+      winStreak: 0, 
+      winRate: loserWinRate,
+      eloRating: loserNewElo,
+      rankScore: loserNewElo
+    })
+    .where(and(eq(gameStats.discordId, loserId), eq(gameStats.game, game)));
+  
+  if (winnerPlayer) {
+    await db.update(players)
+      .set({ totalWins: winnerPlayer.totalWins + 1 })
+      .where(eq(players.discordId, winnerId));
+  }
+  if (loserPlayer) {
+    await db.update(players)
+      .set({ totalLosses: loserPlayer.totalLosses + 1 })
+      .where(eq(players.discordId, loserId));
+  }
+  
+  return { winnerChange: eloChange, loserChange: -eloChange };
+}
+
 export async function recordGameResult(
   discordId: string,
   game: string,
@@ -136,22 +201,38 @@ export async function recordGameResult(
   }
 }
 
+const PVP_GAMES = ["tictactoe", "connect4", "wordduel"];
+
 export async function getLeaderboard(game: string, limit = 10): Promise<GameStat[]> {
+  const isPvP = PVP_GAMES.includes(game);
   return db.query.gameStats.findMany({
     where: eq(gameStats.game, game),
-    orderBy: [desc(gameStats.wins), desc(gameStats.winRate)],
+    orderBy: isPvP 
+      ? [desc(gameStats.eloRating), desc(gameStats.wins)]
+      : [desc(gameStats.wins), desc(gameStats.winRate)],
     limit,
   });
 }
 
 export async function getPlayerRank(discordId: string, game: string): Promise<number> {
   const stats = await getOrCreateGameStats(discordId, game);
-  const result = await db.execute(sql`
-    SELECT COUNT(*) + 1 as rank FROM game_stats 
-    WHERE game = ${game} 
-    AND wins > ${stats.wins}
-  `);
-  return Number((result.rows[0] as any)?.rank || 0);
+  const isPvP = PVP_GAMES.includes(game);
+  
+  if (isPvP) {
+    const result = await db.execute(sql`
+      SELECT COUNT(*) + 1 as rank FROM game_stats 
+      WHERE game = ${game} 
+      AND elo_rating > ${stats.eloRating}
+    `);
+    return Number((result.rows[0] as any)?.rank || 0);
+  } else {
+    const result = await db.execute(sql`
+      SELECT COUNT(*) + 1 as rank FROM game_stats 
+      WHERE game = ${game} 
+      AND wins > ${stats.wins}
+    `);
+    return Number((result.rows[0] as any)?.rank || 0);
+  }
 }
 
 export async function createActiveGame(

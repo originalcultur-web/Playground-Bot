@@ -30,6 +30,7 @@ export const gameStats = pgTable("game_stats", {
   winStreak: integer("win_streak").notNull().default(0),
   bestStreak: integer("best_streak").notNull().default(0),
   rankScore: real("rank_score").notNull().default(0),
+  eloRating: integer("elo_rating").notNull().default(1000),
   extraStats: jsonb("extra_stats").$type<Record<string, any>>().default({}),
   equippedSkin: integer("equipped_skin"),
 });
