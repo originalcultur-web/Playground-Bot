@@ -54,9 +54,20 @@ Playground offers competitive PvP and solo games with interactive button-based U
 
 ## Ranking System
 
-- Minimum 20 ranked games to appear on leaderboard
-- Rank Score = (wins × 10) + win_rate
-- Global leaderboards per game
+### PvP Games (Connect 4, Tic Tac Toe, Word Duel)
+- **Elo Rating System** - Start at 1000, adjust based on opponent's rating
+- Beat stronger opponents = gain more points
+- Leaderboards sorted by Elo rating
+- Rating change shown after each match (+N ⭐)
+
+### Solo Games (Minesweeper, Wordle)
+- Leaderboards sorted by total wins
+
+### Leaderboard Display
+```
+1. **PlayerName** (*@username*)
+   ⭐ 1250  🏆 42  💀 18  📈 70%
+```
 
 ## Project Structure
 
@@ -108,9 +119,10 @@ npm run db:push    # Push database schema
 
 ## Recent Changes
 
-- Removed chess game
+- **Elo Rating System** - PvP games now use Elo-based ranking
+- Rating changes displayed after matches (+N ⭐)
+- Leaderboard display updated with emoji icons and compact format
+- Leaderboard cache clears after games for instant updates
 - Cross-server matchmaking - players from different servers can be matched together
-- Player names now show display names/usernames instead of IDs
-- Forfeit lockout disabled for testing
+- Player names show as **DisplayName** (*@username*) format
 - Flag mode toggle button added to Minesweeper
-- Leaderboard shows all players immediately (no game minimum)
