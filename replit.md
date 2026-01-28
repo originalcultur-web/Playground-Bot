@@ -14,7 +14,6 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - **Word Duel** - 5 scrambled words, first to unscramble wins point
 
 ### Solo Leaderboard Games
-- **Minesweeper** - 5x5 grid with interactive buttons
 - **Wordle** - 6 attempts to guess 5-letter word
 
 ## Commands
@@ -23,14 +22,12 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - `,connect4` / `,c4` - Queue for Connect 4 or challenge @user
 - `,tictactoe` / `,ttt` - Queue for Tic Tac Toe or challenge @user
 - `,wordduel` / `,wd` - Queue for Word Duel or challenge @user
-- `,minesweeper` / `,ms` - Start solo Minesweeper
 - `,wordle` / `,w` - Start solo Wordle
 
 ### Gameplay Commands
 - `,quit` / `,q` - Forfeit current game or leave queue
 - `,accept` - Accept a challenge
 - **Tic Tac Toe & Connect 4** - Click buttons to play
-- **Minesweeper** - Click cells to reveal, toggle flag mode
 - **Wordle & Word Duel** - Type your answers
 
 ### Profile & Stats
@@ -38,19 +35,14 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - `,profile @user` - View someone's profile
 - `,leaderboard <game>` / `,lb <game>` - View game leaderboard
 
-### Shop & Inventory
-- `,shop` - Browse the shop
-- `,shop <category>` - Browse specific category
-- `,buy <number>` - Purchase an item
-- `,inventory` / `,inv` - View your inventory
-- `,equip <number>` - Equip an item
-- `,unequip <type>` - Unequip an item
+### Shop (Coming Soon)
+- `,shop` - Preview cosmetic shop
 
 ## Economy System
 
 - **Coins** - Single in-app currency
 - Earn 5 coins per ranked win (50 daily cap)
-- Spend coins in the shop
+- Spend coins in the shop (coming soon)
 
 ## Ranking System
 
@@ -60,7 +52,7 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - Leaderboards sorted by Elo rating
 - Rating change shown after each match (+N ⭐)
 
-### Solo Games (Minesweeper, Wordle)
+### Solo Games (Wordle)
 - Leaderboards sorted by total wins
 
 ### Leaderboard Display
@@ -78,7 +70,6 @@ src/
 │   ├── connect4.ts   # Connect 4 game logic
 │   ├── tictactoe.ts  # Tic Tac Toe game logic
 │   ├── wordduel.ts   # Word Duel game logic
-│   ├── minesweeper.ts # Minesweeper game logic
 │   └── wordle.ts     # Wordle game logic
 shared/
 └── schema.ts         # Database schema (Drizzle ORM)
@@ -93,8 +84,8 @@ server/
 - **gameStats** - Per-game statistics and rankings
 - **activeGames** - Persistent game state
 - **matchHistory** - PvP match records with Elo changes
-- **shopItems** - Cosmetic items for sale
-- **userInventory** - Owned items
+- **shopItems** - Cosmetic items for sale (coming soon)
+- **userInventory** - Owned items (coming soon)
 - **matchmakingQueue** - Active queue entries
 - **pendingChallenges** - Pending game challenges
 - **recentOpponents** - Anti-farming tracking
@@ -127,9 +118,12 @@ This bot is configured as an **Autoscale background worker** deployment:
 
 ## Recent Changes
 
+- **Minesweeper Removed** - Game removed from bot
+- **Shop Disabled** - Coming soon with unique cosmetic items
+- **Unified Coin System** - All coin awards handled internally in storage layer
 - **Daily Streak Counter** - Tracks consecutive days of play, displayed on profile
 - **Rank Badge System** - 5 visual tiers displayed on PvP rankings (Bronze/Silver/Gold/Diamond/Champion)
-- **Wordle Keyboard** - Shows used letters with color-coded status after each guess
+- **Wordle Keyboard** - Shows used letters with grouped status format after each guess
 - **GG Button** - Sportsmanship button appears alongside rematch after PvP games
 - **Word Duel Countdown** - "3... 2... 1... GO!" animation before each round
 - **Coin Animations** - Delayed celebratory coin message appears after all game wins
@@ -145,4 +139,3 @@ This bot is configured as an **Autoscale background worker** deployment:
 - Leaderboard cache clears after games for instant updates
 - Cross-server matchmaking - players from different servers can be matched together
 - Player names show as **DisplayName** (*@username*) format
-- Flag mode toggle button added to Minesweeper

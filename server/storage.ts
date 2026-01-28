@@ -158,7 +158,7 @@ export async function recordPvPResult(
   winnerName?: string,
   loserName?: string,
   duration?: number
-): Promise<{ winnerChange: number; loserChange: number }> {
+): Promise<{ winnerChange: number; loserChange: number; coinsEarned: number }> {
   const winnerStats = await getOrCreateGameStats(winnerId, game);
   const loserStats = await getOrCreateGameStats(loserId, game);
   const winnerPlayer = await getPlayer(winnerId);
@@ -226,7 +226,9 @@ export async function recordPvPResult(
   await updateDailyStreak(winnerId);
   await updateDailyStreak(loserId);
   
-  return { winnerChange: eloChange, loserChange: -eloChange };
+  const coinsEarned = await awardWinCoins(winnerId);
+  
+  return { winnerChange: eloChange, loserChange: -eloChange, coinsEarned };
 }
 
 export async function getMatchHistory(discordId: string, limit: number = 5) {

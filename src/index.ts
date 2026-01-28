@@ -22,7 +22,6 @@ import * as storage from "#server/storage.js";
 import * as connect4 from "./games/connect4.js";
 import * as tictactoe from "./games/tictactoe.js";
 import * as wordduel from "./games/wordduel.js";
-import * as minesweeper from "./games/minesweeper.js";
 import * as wordle from "./games/wordle.js";
 import * as ui from "./ui/gameComponents.js";
 
@@ -123,7 +122,6 @@ async function handleHelp(message: Message) {
 \`,connect4\` - Play Connect 4 (queue or @user)
 \`,tictactoe\` - Play Tic Tac Toe (queue or @user)
 \`,wordduel\` - Play Word Duel (queue or @user)
-\`,minesweeper\` - Play Minesweeper (solo)
 \`,wordle\` - Play Wordle (solo)
 
 **During Games:**
@@ -133,11 +131,8 @@ async function handleHelp(message: Message) {
 \`,profile\` - View your profile
 \`,leaderboard <game>\` - View leaderboard
 
-**Shop & Inventory:**
-\`,shop\` - Browse the shop
-\`,buy <number>\` - Buy an item
-\`,inventory\` - View your inventory
-\`,equip <number>\` - Equip an item
+**Shop (Coming Soon):**
+\`,shop\` - Preview cosmetic shop
 
 \`,accept\` - Accept a challenge`;
   await message.channel.send(help);
@@ -190,12 +185,11 @@ async function handleProfile(message: Message, args: string[]) {
   profile += `\n\n`;
   
   const pvpGames = ["tictactoe", "connect4", "wordduel"];
-  const soloGames = ["minesweeper", "wordle"];
+  const soloGames = ["wordle"];
   const gameLabels: Record<string, string> = {
     tictactoe: "Tic Tac Toe",
     connect4: "Connect 4",
     wordduel: "Word Duel",
-    minesweeper: "Minesweeper",
     wordle: "Wordle"
   };
   
@@ -244,7 +238,7 @@ function clearLeaderboardCache(game?: string) {
 
 async function handleLeaderboard(message: Message, args: string[]) {
   const game = args[0]?.toLowerCase();
-  const validGames = ["connect4", "tictactoe", "wordduel", "minesweeper", "wordle"];
+  const validGames = ["connect4", "tictactoe", "wordduel", "wordle"];
   
   if (!game || !validGames.includes(game)) {
     await message.channel.send(`Usage: ,leaderboard <game>\nGames: ${validGames.join(", ")}`);
@@ -295,103 +289,24 @@ async function handleLeaderboard(message: Message, args: string[]) {
   await message.channel.send(display);
 }
 
-async function handleShop(message: Message, args: string[]) {
-  const category = args[0]?.toLowerCase();
-  const items = await storage.getShopItems(category);
-  
-  if (items.length === 0) {
-    await message.channel.send("No items found. Categories: badges, titles, frames, connect4");
-    return;
-  }
-  
-  let display = "**SHOP**\n\n";
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    display += `${i + 1}. ${item.emoji} ${item.name} - ${item.price} coins\n`;
-    if (item.description) display += `   ${item.description}\n`;
-  }
-  display += "\nUse `,buy <number>` to purchase";
-  
-  await message.channel.send(display);
+async function handleShop(message: Message, _args: string[]) {
+  await message.channel.send("**SHOP**\n\n🚧 Coming Soon! 🚧\n\nOur team is working on exciting cosmetic items for you to customize your profile. Stay tuned!");
 }
 
-async function handleBuy(message: Message, args: string[]) {
-  const itemNumber = parseInt(args[0]);
-  if (isNaN(itemNumber) || itemNumber < 1) {
-    await message.channel.send("Usage: ,buy <number>");
-    return;
-  }
-  
-  const items = await storage.getShopItems();
-  if (itemNumber > items.length) {
-    await message.channel.send("Invalid item number.");
-    return;
-  }
-  
-  const item = items[itemNumber - 1];
-  const result = await storage.purchaseItem(message.author.id, item.id);
-  
-  if (result.success) {
-    await message.channel.send(`Purchased ${item.emoji} ${item.name}! It has been equipped.`);
-  } else {
-    await message.channel.send(result.error || "Purchase failed.");
-  }
+async function handleBuy(message: Message, _args: string[]) {
+  await message.channel.send("🚧 Shop coming soon! Check back later for cosmetic items.");
 }
 
 async function handleInventory(message: Message) {
-  const inventory = await storage.getUserInventory(message.author.id);
-  
-  if (inventory.length === 0) {
-    await message.channel.send("Your inventory is empty. Visit ,shop to browse items!");
-    return;
-  }
-  
-  let display = "**YOUR INVENTORY**\n\n";
-  for (let i = 0; i < inventory.length; i++) {
-    const inv = inventory[i];
-    if (inv.item) {
-      display += `${i + 1}. ${inv.item.emoji} ${inv.item.name} (${inv.item.itemType})\n`;
-    }
-  }
-  display += "\nUse `,equip <number>` to equip an item";
-  
-  await message.channel.send(display);
+  await message.channel.send("🚧 Inventory coming soon! You'll be able to view your purchased items here.");
 }
 
-async function handleEquip(message: Message, args: string[]) {
-  const itemNumber = parseInt(args[0]);
-  if (isNaN(itemNumber) || itemNumber < 1) {
-    await message.channel.send("Usage: ,equip <number>");
-    return;
-  }
-  
-  const inventory = await storage.getUserInventory(message.author.id);
-  if (itemNumber > inventory.length) {
-    await message.channel.send("Invalid item number.");
-    return;
-  }
-  
-  const inv = inventory[itemNumber - 1];
-  if (!inv.item) {
-    await message.channel.send("Item not found.");
-    return;
-  }
-  
-  await storage.equipItem(message.author.id, inv.itemId);
-  await message.channel.send(`Equipped ${inv.item.emoji} ${inv.item.name}!`);
+async function handleEquip(message: Message, _args: string[]) {
+  await message.channel.send("🚧 Equipment system coming soon!");
 }
 
-async function handleUnequip(message: Message, args: string[]) {
-  const type = args[0]?.toLowerCase();
-  const validTypes = ["badge", "title", "frame", "skin"];
-  
-  if (!type || !validTypes.includes(type)) {
-    await message.channel.send(`Usage: ,unequip <type>\nTypes: ${validTypes.join(", ")}`);
-    return;
-  }
-  
-  await storage.unequipItem(message.author.id, type, args[1]);
-  await message.channel.send(`Unequipped ${type}.`);
+async function handleUnequip(message: Message, _args: string[]) {
+  await message.channel.send("🚧 Equipment system coming soon!");
 }
 
 async function startPvPGame(player1Channel: TextChannel, gameType: string, player1Id: string, player2Id: string, player1Info?: {username: string, displayName?: string}, player2Info?: {username: string, displayName?: string}, player2ChannelId?: string) {
@@ -596,26 +511,7 @@ async function handleSoloGame(message: Message, gameType: string) {
   let state: any;
   let sentMessage;
   
-  if (gameType === "minesweeper") {
-    state = minesweeper.createGameState(playerId);
-    state.size = 5;
-    state.mines = 5;
-    state.board = createMinesweeperBoard(5, 5);
-    state.revealed = Array(5).fill(null).map(() => Array(5).fill(false));
-    state.flagged = Array(5).fill(null).map(() => Array(5).fill(false));
-    
-    const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
-    const buttons = ui.createMinesweeperBoard(state, game.id);
-    
-    sentMessage = await message.channel.send({
-      content: `**MINESWEEPER**\n\n5 mines hidden | Reveal mode\n\nClick cells to reveal. Toggle flag mode to mark mines.`,
-      components: buttons
-    });
-    
-    if (sentMessage) {
-      gameMessages.set(game.id, sentMessage.id);
-    }
-  } else if (gameType === "wordle") {
+  if (gameType === "wordle") {
     state = wordle.createGameState(playerId);
     const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
     
@@ -628,39 +524,6 @@ async function handleSoloGame(message: Message, gameType: string) {
       gameMessages.set(game.id, sentMessage.id);
     }
   }
-}
-
-function createMinesweeperBoard(size: number, mines: number): number[][] {
-  const board = Array(size).fill(null).map(() => Array(size).fill(0));
-  
-  let minesPlaced = 0;
-  while (minesPlaced < mines) {
-    const row = Math.floor(Math.random() * size);
-    const col = Math.floor(Math.random() * size);
-    if (board[row][col] !== -1) {
-      board[row][col] = -1;
-      minesPlaced++;
-    }
-  }
-  
-  for (let row = 0; row < size; row++) {
-    for (let col = 0; col < size; col++) {
-      if (board[row][col] === -1) continue;
-      let count = 0;
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          const nr = row + dr;
-          const nc = col + dc;
-          if (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === -1) {
-            count++;
-          }
-        }
-      }
-      board[row][col] = count;
-    }
-  }
-  
-  return board;
 }
 
 async function handleQuit(message: Message) {
@@ -691,13 +554,11 @@ async function handleQuit(message: Message) {
     if (PVP_GAMES.includes(game.gameType)) {
       const { winnerChange } = await storage.recordPvPResult(opponentId, playerId, game.gameType, opponentName, playerName);
       clearLeaderboardCache(game.gameType);
-      await storage.awardWinCoins(opponentId);
       await storage.recordForfeit(playerId);
       await sendToGameChannels(game, { content: `**${playerName}** forfeited. **${opponentName}** wins! (+${winnerChange})` });
     } else {
       await storage.recordGameResult(playerId, game.gameType, "loss");
       await storage.recordGameResult(opponentId, game.gameType, "win");
-      await storage.awardWinCoins(opponentId);
       await storage.recordForfeit(playerId);
       await sendToGameChannels(game, { content: `**${playerName}** forfeited. **${opponentName}** wins!` });
     }
@@ -755,8 +616,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         if (matchResult.winner) {
           const winnerName = await getPlayerName(winnerId);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
-          const coinsEarned = await storage.awardWinCoins(winnerId);
+          const { winnerChange, coinsEarned } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
           eloText = ` (+${winnerChange})`;
           clearLeaderboardCache("tictactoe");
           
@@ -872,8 +732,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       
       const winnerName = await getPlayerName(winnerId);
       const loserName = await getPlayerName(loserId);
-      const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
-      const coinsEarned = await storage.awardWinCoins(winnerId);
+      const { winnerChange, coinsEarned } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
       clearLeaderboardCache("connect4");
       
       if (coinsEarned > 0 && interaction.channel) {
@@ -919,99 +778,6 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     resetGameTimer(game.id, interaction.channel as TextChannel);
   }
   
-  else if (customId.startsWith("msflag_")) {
-    const gameId = customId.split("_")[1];
-    
-    const game = await storage.getActiveGameById(gameId);
-    if (!game) {
-      await interaction.reply({ content: "Game not found.", ephemeral: true });
-      return;
-    }
-    
-    const state = game.state as any;
-    
-    if (userId !== state.playerId) {
-      await interaction.reply({ content: "This isn't your game!", ephemeral: true });
-      return;
-    }
-    
-    state.flagMode = !state.flagMode;
-    await storage.updateGameState(game.id, state);
-    
-    const buttons = ui.createMinesweeperBoard(state, game.id);
-    const flagCount = state.flagged.flat().filter((f: boolean) => f).length;
-    const modeText = state.flagMode ? "Flag mode - click to place/remove flags" : "Reveal mode - click to reveal cells";
-    
-    await interaction.update({
-      content: `**MINESWEEPER**\n\n5 mines hidden | Flags: ${flagCount}/5 | ${modeText}\n`,
-      components: buttons
-    });
-  }
-  
-  else if (customId.startsWith("ms_")) {
-    const parts = customId.split("_");
-    const gameId = parts[1];
-    const row = parseInt(parts[2]);
-    const col = parseInt(parts[3]);
-    
-    const game = await storage.getActiveGameById(gameId);
-    if (!game) {
-      await interaction.reply({ content: "Game not found.", ephemeral: true });
-      return;
-    }
-    
-    const state = game.state as any;
-    
-    if (userId !== state.playerId) {
-      await interaction.reply({ content: "This isn't your game!", ephemeral: true });
-      return;
-    }
-    
-    if (state.flagMode) {
-      state.flagged[row][col] = !state.flagged[row][col];
-    } else {
-      if (state.flagged[row][col]) {
-        await interaction.reply({ content: "Remove the flag first!", ephemeral: true });
-        return;
-      }
-      revealMinesweeperCell(state, row, col);
-    }
-    
-    await storage.updateGameState(game.id, state);
-    
-    if (state.gameOver) {
-      const result = state.won ? "win" : "loss";
-      const coinsEarned = await storage.recordGameResult(state.playerId, "minesweeper", result);
-      clearLeaderboardCache("minesweeper");
-      await storage.endGame(game.id);
-      
-      if (state.won && coinsEarned > 0 && interaction.channel) {
-        sendCoinAnimation(interaction.channel as TextChannel, coinsEarned, state.playerId);
-      }
-    }
-    
-    const buttons = ui.createMinesweeperBoard(state, game.id);
-    const flagCount = state.flagged.flat().filter((f: boolean) => f).length;
-    let statusText: string;
-    
-    if (state.gameOver) {
-      if (state.won) {
-        const time = Math.floor((state.endTime - state.startTime) / 1000);
-        statusText = `🎉 You won! Time: ${time}s`;
-      } else {
-        statusText = "Game Over! You hit a mine.";
-      }
-    } else {
-      const modeText = state.flagMode ? "Flag mode" : "Reveal mode";
-      statusText = `5 mines hidden | Flags: ${flagCount}/5 | ${modeText}`;
-    }
-    
-    await interaction.update({
-      content: `**MINESWEEPER**\n\n${statusText}\n`,
-      components: buttons
-    });
-  }
-  
   else if (customId.startsWith("quit_")) {
     const gameId = customId.split("_")[1];
     const game = await storage.getActiveGameById(gameId);
@@ -1042,7 +808,6 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         await storage.recordGameResult(userId, game.gameType, "loss");
         await storage.recordGameResult(opponentId, game.gameType, "win");
       }
-      await storage.awardWinCoins(opponentId);
       await storage.recordForfeit(userId);
       
       await interaction.update({
@@ -1125,47 +890,6 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
   }
 }
 
-function revealMinesweeperCell(state: any, row: number, col: number): void {
-  const size = state.size || 5;
-  if (row < 0 || row >= size || col < 0 || col >= size) return;
-  if (state.revealed[row][col] || state.flagged[row][col]) return;
-  if (state.gameOver) return;
-  
-  state.revealed[row][col] = true;
-  
-  if (state.board[row][col] === -1) {
-    state.gameOver = true;
-    state.won = false;
-    state.endTime = Date.now();
-    return;
-  }
-  
-  if (state.board[row][col] === 0) {
-    for (let dr = -1; dr <= 1; dr++) {
-      for (let dc = -1; dc <= 1; dc++) {
-        revealMinesweeperCell(state, row + dr, col + dc);
-      }
-    }
-  }
-  
-  let allRevealed = true;
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      if (state.board[r][c] !== -1 && !state.revealed[r][c]) {
-        allRevealed = false;
-        break;
-      }
-    }
-    if (!allRevealed) break;
-  }
-  
-  if (allRevealed) {
-    state.gameOver = true;
-    state.won = true;
-    state.endTime = Date.now();
-  }
-}
-
 async function handleTextGameInput(message: Message) {
   const playerId = message.author.id;
   const content = message.content.trim().toLowerCase();
@@ -1193,8 +917,7 @@ async function handleTextGameInput(message: Message) {
           const loserId = winner === state.player1Id ? state.player2Id : state.player1Id;
           const winnerName = await getPlayerName(winner);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
-          const coinsEarned = await storage.awardWinCoins(winner);
+          const { winnerChange, coinsEarned } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
           eloText = ` (+${winnerChange})`;
           clearLeaderboardCache("wordduel");
           
@@ -1413,7 +1136,6 @@ function startGameTimer(gameId: string, channel: TextChannel) {
           const winnerName = await getPlayerName(winner);
           const loserName = await getPlayerName(loserId);
           const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
-          await storage.awardWinCoins(winner);
           eloText = ` (+${winnerChange})`;
           clearLeaderboardCache("wordduel");
         }
@@ -1458,7 +1180,6 @@ function startGameTimer(gameId: string, channel: TextChannel) {
         await storage.recordGameResult(currentPlayerId, game.gameType, "loss");
         await storage.recordGameResult(opponentId, game.gameType, "win");
       }
-      await storage.awardWinCoins(opponentId);
       await sendToGameChannels(game, { content: `**${timedOutName}** timed out. **${winnerName}** wins!${eloText}` });
     }
     
@@ -1550,10 +1271,6 @@ client.on(Events.MessageCreate, async (message: Message) => {
         case "wordduel":
         case "wd":
           await handleGameCommand(message, "wordduel");
-          break;
-        case "minesweeper":
-        case "ms":
-          await handleSoloGame(message, "minesweeper");
           break;
         case "wordle":
         case "w":
