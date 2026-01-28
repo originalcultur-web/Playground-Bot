@@ -108,8 +108,9 @@ npm run db:push    # Push database schema
 
 ## Recent Changes
 
-- Initial bot implementation with all 6 games
-- Coin economy with daily cap
-- Shop and inventory system
-- Global leaderboards with caching
-- Anti-abuse protections
+- Removed chess game
+- Cross-server matchmaking - players from different servers can be matched together
+- Player names now show display names/usernames instead of IDs
+- Forfeit lockout disabled for testing
+- Flag mode toggle button added to Minesweeper
+- Leaderboard shows all players immediately (no game minimum)

@@ -39,6 +39,32 @@ async function getPlayerName(discordId: string): Promise<string> {
   return player?.displayName || player?.username || "Unknown";
 }
 
+async function sendToGameChannels(game: any, messageOptions: any) {
+  const channels: TextChannel[] = [];
+  
+  try {
+    const channel1 = await client.channels.fetch(game.channelId) as TextChannel;
+    if (channel1) channels.push(channel1);
+  } catch (e) {}
+  
+  if (game.player2ChannelId && game.player2ChannelId !== game.channelId) {
+    try {
+      const channel2 = await client.channels.fetch(game.player2ChannelId) as TextChannel;
+      if (channel2) channels.push(channel2);
+    } catch (e) {}
+  }
+  
+  for (const ch of channels) {
+    try {
+      await ch.send(messageOptions);
+    } catch (e) {
+      console.error("Failed to send to channel:", e);
+    }
+  }
+  
+  return channels[0];
+}
+
 async function handleHelp(message: Message) {
   const help = `**PLAYGROUND - Commands**
 
@@ -247,7 +273,7 @@ async function handleUnequip(message: Message, args: string[]) {
   await message.channel.send(`Unequipped ${type}.`);
 }
 
-async function startPvPGame(channel: TextChannel, gameType: string, player1Id: string, player2Id: string, player1Info?: {username: string, displayName?: string}, player2Info?: {username: string, displayName?: string}) {
+async function startPvPGame(player1Channel: TextChannel, gameType: string, player1Id: string, player2Id: string, player1Info?: {username: string, displayName?: string}, player2Info?: {username: string, displayName?: string}, player2ChannelId?: string) {
   if (player1Info) {
     await storage.getOrCreatePlayer(player1Id, player1Info.username, player1Info.displayName);
   }
@@ -270,40 +296,44 @@ async function startPvPGame(channel: TextChannel, gameType: string, player1Id: s
       return;
   }
   
-  const game = await storage.createActiveGame(gameType, player1Id, channel.id, state, player2Id);
+  const game = await storage.createActiveGame(gameType, player1Id, player1Channel.id, state, player2Id, player2ChannelId);
   await storage.recordRecentOpponent(player1Id, player2Id, gameType);
   
   const player1Name = await getPlayerName(player1Id);
   const player2Name = await getPlayerName(player2Id);
   
-  let sentMessage;
+  let content = "";
+  let buttons: any[] = [];
   
   if (gameType === "tictactoe") {
-    const buttons = ui.createTicTacToeBoard(state, game.id);
+    buttons = ui.createTicTacToeBoard(state, game.id);
     const scoreText = state.maxRounds > 1 ? `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
-    sentMessage = await channel.send({
-      content: `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${player1Name}**'s turn`,
-      components: buttons
-    });
+    content = `🎮 **TIC TAC TOE**\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${player1Name}**'s turn`;
   } else if (gameType === "connect4") {
-    const buttons = ui.createConnect4Board(state, game.id);
+    buttons = ui.createConnect4Board(state, game.id);
     const display = ui.createConnect4Display(state);
-    sentMessage = await channel.send({
-      content: `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${player1Name}**'s turn`,
-      components: buttons
-    });
+    content = `🎮 **CONNECT 4**\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\nIt's **${player1Name}**'s turn`;
   } else if (gameType === "wordduel") {
     const scrambled = state.scrambledWords[0].toUpperCase();
-    sentMessage = await channel.send({
-      content: `⚔️ **WORD DUEL**\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\nUnscramble: **${scrambled}**\nType your answer!`
-    });
+    content = `⚔️ **WORD DUEL**\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\nUnscramble: **${scrambled}**\nType your answer!`;
   }
   
-  if (sentMessage) {
-    gameMessages.set(game.id, sentMessage.id);
+  const messageOptions = gameType === "wordduel" ? { content } : { content, components: buttons };
+  const sentMessage = await player1Channel.send(messageOptions);
+  gameMessages.set(game.id, sentMessage.id);
+  
+  if (player2ChannelId && player2ChannelId !== player1Channel.id) {
+    try {
+      const player2Channel = await client.channels.fetch(player2ChannelId) as TextChannel;
+      if (player2Channel) {
+        await player2Channel.send(messageOptions);
+      }
+    } catch (e) {
+      console.error("Could not send to player2 channel:", e);
+    }
   }
   
-  startGameTimer(game.id, channel);
+  startGameTimer(game.id, player1Channel);
 }
 
 async function handleGameCommand(message: Message, gameType: string) {
@@ -362,7 +392,7 @@ async function handleGameCommand(message: Message, gameType: string) {
       const player1Info = { username: message.author.username, displayName: message.author.displayName };
       const matchPlayer = await storage.getPlayer(match.discordId);
       const player2Info = matchPlayer ? { username: matchPlayer.username, displayName: matchPlayer.displayName || undefined } : undefined;
-      await startPvPGame(channel, gameType, playerId, match.discordId, player1Info, player2Info);
+      await startPvPGame(channel, gameType, playerId, match.discordId, player1Info, player2Info, match.channelId);
     } else if (attempts < 12) {
       matchmakingTimers.set(playerId, setTimeout(findOpponent, 5000));
     } else {
@@ -503,7 +533,7 @@ async function handleQuit(message: Message) {
     await storage.recordGameResult(opponentId, game.gameType, "win");
     await storage.awardWinCoins(opponentId);
     await storage.recordForfeit(playerId);
-    await message.channel.send(`**${playerName}** forfeited. **${opponentName}** wins!`);
+    await sendToGameChannels(game, { content: `**${playerName}** forfeited. **${opponentName}** wins!` });
   } else {
     await message.channel.send("Game ended.");
   }
@@ -1007,7 +1037,7 @@ function startGameTimer(gameId: string, channel: TextChannel) {
       
       const timedOutName = await getPlayerName(currentPlayerId);
       const winnerName = await getPlayerName(opponentId);
-      await channel.send(`⏰ **${timedOutName}** timed out. **${winnerName}** wins!`);
+      await sendToGameChannels(game, { content: `⏰ **${timedOutName}** timed out. **${winnerName}** wins!` });
     }
     
     await storage.endGame(gameId);

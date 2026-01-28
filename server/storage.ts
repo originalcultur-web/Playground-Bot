@@ -160,7 +160,8 @@ export async function createActiveGame(
   player1Id: string,
   channelId: string,
   state: Record<string, any>,
-  player2Id?: string
+  player2Id?: string,
+  player2ChannelId?: string
 ): Promise<ActiveGame> {
   const [game] = await db.insert(activeGames)
     .values({
@@ -168,6 +169,7 @@ export async function createActiveGame(
       player1Id,
       player2Id: player2Id || null,
       channelId,
+      player2ChannelId: player2ChannelId || null,
       currentTurn: player1Id,
       state,
     })

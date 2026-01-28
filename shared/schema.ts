@@ -40,6 +40,7 @@ export const activeGames = pgTable("active_games", {
   player1Id: text("player1_id").notNull(),
   player2Id: text("player2_id"),
   channelId: text("channel_id").notNull(),
+  player2ChannelId: text("player2_channel_id"),
   currentTurn: text("current_turn"),
   state: jsonb("state").$type<Record<string, any>>().notNull(),
   lastAction: timestamp("last_action").defaultNow().notNull(),
