@@ -111,9 +111,9 @@ npm run db:push    # Push database schema
 
 ## Deployment
 
-This bot is configured as an **Autoscale background worker** deployment:
-- No HTTP server or port listening required
-- Runs continuously to maintain Discord connection
+This bot is configured as a **Reserved VM** deployment:
+- Runs continuously 24/7 to maintain Discord connection
+- No cold start delays - instant command responses
 - Ideal for Discord bots that need persistent connections
 
 ## Recent Changes
