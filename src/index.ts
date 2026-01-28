@@ -521,14 +521,37 @@ async function handleAccept(message: Message) {
   }
   
   const challenge = allChallenges[0];
-  await storage.removeChallenge(challenge.id);
   
+  const challengerPlayer = await storage.getPlayer(challenge.challengerId);
+  if (!challengerPlayer) {
+    await storage.removeChallenge(challenge.id);
+    await message.channel.send("Challenge expired - challenger not found.");
+    return;
+  }
+  
+  const existingGame = await storage.getActiveGame(challenge.challengerId);
+  if (existingGame) {
+    await storage.removeChallenge(challenge.id);
+    await message.channel.send("Challenge expired - challenger is already in a game.");
+    return;
+  }
+  
+  await storage.removeChallenge(challenge.id);
   await storage.getOrCreatePlayer(message.author.id, message.author.username, message.author.displayName);
   
+  const gameNames: Record<string, string> = {
+    tictactoe: "Tic Tac Toe",
+    connect4: "Connect 4",
+    wordduel: "Word Duel"
+  };
+  const gameName = gameNames[challenge.gameType] || challenge.gameType;
+  const challengerName = challengerPlayer.displayName || challengerPlayer.username;
+  
   const channel = message.channel as TextChannel;
-  const challengerPlayer = await storage.getPlayer(challenge.challengerId);
-  const player1Info = challengerPlayer ? { username: challengerPlayer.username, displayName: challengerPlayer.displayName || undefined } : undefined;
+  const player1Info = { username: challengerPlayer.username, displayName: challengerPlayer.displayName || undefined };
   const player2Info = { username: message.author.username, displayName: message.author.displayName };
+  
+  await message.channel.send(`Starting **${gameName}** with **${challengerName}**...`);
   await startPvPGame(channel, challenge.gameType, challenge.challengerId, message.author.id, player1Info, player2Info);
 }
 

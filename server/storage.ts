@@ -386,6 +386,10 @@ export async function recordRecentOpponent(player1Id: string, player2Id: string,
 }
 
 export async function createChallenge(challengerId: string, challengedId: string, gameType: string, channelId: string): Promise<void> {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  await db.delete(pendingChallenges).where(
+    sql`${pendingChallenges.createdAt} < ${fiveMinutesAgo}`
+  );
   await db.insert(pendingChallenges).values({ challengerId, challengedId, gameType, channelId });
 }
 
@@ -402,6 +406,7 @@ export async function getChallenge(challengedId: string, challengerId?: string, 
 export async function getAllChallengesForUser(challengedId: string) {
   return db.query.pendingChallenges.findMany({
     where: eq(pendingChallenges.challengedId, challengedId),
+    orderBy: [desc(pendingChallenges.createdAt)],
   });
 }
 
