@@ -1047,7 +1047,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       return;
     }
     
-    const existingChallenge = await storage.getPendingChallenge(challengerId, opponentId);
+    const existingChallenge = await storage.getChallenge(opponentId, challengerId);
     if (existingChallenge) {
       await interaction.reply({ content: "You already have a pending challenge to this player.", ephemeral: true });
       return;
