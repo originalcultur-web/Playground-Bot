@@ -12,8 +12,6 @@ import * as storage from "#server/storage.js";
 import * as connect4 from "./games/connect4.js";
 import * as tictactoe from "./games/tictactoe.js";
 import * as wordduel from "./games/wordduel.js";
-import * as chess from "./games/chess.js";
-import { Chess as ChessJs } from "chess.js";
 import * as minesweeper from "./games/minesweeper.js";
 import * as wordle from "./games/wordle.js";
 import * as ui from "./ui/gameComponents.js";
@@ -48,7 +46,6 @@ async function handleHelp(message: Message) {
 \`,connect4\` - Play Connect 4 (queue or @user)
 \`,tictactoe\` - Play Tic Tac Toe (queue or @user)
 \`,wordduel\` - Play Word Duel (queue or @user)
-\`,chess\` - Play Chess (queue or @user)
 \`,minesweeper\` - Play Minesweeper (solo)
 \`,wordle\` - Play Wordle (solo)
 
@@ -112,7 +109,7 @@ Total Losses: ${player.totalLosses}`;
 
 async function handleLeaderboard(message: Message, args: string[]) {
   const game = args[0]?.toLowerCase();
-  const validGames = ["connect4", "tictactoe", "chess", "wordduel", "minesweeper", "wordle"];
+  const validGames = ["connect4", "tictactoe", "wordduel", "minesweeper", "wordle"];
   
   if (!game || !validGames.includes(game)) {
     await message.channel.send(`Usage: ,leaderboard <game>\nGames: ${validGames.join(", ")}`);
@@ -156,7 +153,7 @@ async function handleShop(message: Message, args: string[]) {
   const items = await storage.getShopItems(category);
   
   if (items.length === 0) {
-    await message.channel.send("No items found. Categories: badges, titles, frames, connect4, chess");
+    await message.channel.send("No items found. Categories: badges, titles, frames, connect4");
     return;
   }
   
@@ -250,9 +247,13 @@ async function handleUnequip(message: Message, args: string[]) {
   await message.channel.send(`Unequipped ${type}.`);
 }
 
-async function startPvPGame(channel: TextChannel, gameType: string, player1Id: string, player2Id: string) {
-  await storage.getOrCreatePlayer(player1Id, player1Id);
-  await storage.getOrCreatePlayer(player2Id, player2Id);
+async function startPvPGame(channel: TextChannel, gameType: string, player1Id: string, player2Id: string, player1Info?: {username: string, displayName?: string}, player2Info?: {username: string, displayName?: string}) {
+  if (player1Info) {
+    await storage.getOrCreatePlayer(player1Id, player1Info.username, player1Info.displayName);
+  }
+  if (player2Info) {
+    await storage.getOrCreatePlayer(player2Id, player2Info.username, player2Info.displayName);
+  }
   
   let state: any;
   switch (gameType) {
@@ -264,9 +265,6 @@ async function startPvPGame(channel: TextChannel, gameType: string, player1Id: s
       break;
     case "wordduel":
       state = wordduel.createGameState(player1Id, player2Id);
-      break;
-    case "chess":
-      state = chess.createGameState(player1Id, player2Id);
       break;
     default:
       return;
@@ -299,11 +297,6 @@ async function startPvPGame(channel: TextChannel, gameType: string, player1Id: s
     sentMessage = await channel.send({
       content: `⚔️ **WORD DUEL**\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\nUnscramble: **${scrambled}**\nType your answer!`
     });
-  } else if (gameType === "chess") {
-    const chessBoard = createChessDisplay(state);
-    sentMessage = await channel.send({
-      content: `♟️ **CHESS**\n${player1Name} (White) vs ${player2Name} (Black)\n\`\`\`\n${chessBoard}\n\`\`\`\nIt's **${player1Name}**'s turn - Type your move (e.g., e4, Nf3)`
-    });
   }
   
   if (sentMessage) {
@@ -311,33 +304,6 @@ async function startPvPGame(channel: TextChannel, gameType: string, player1Id: s
   }
   
   startGameTimer(game.id, channel);
-}
-
-function createChessDisplay(state: any): string {
-  const chessInstance = new ChessJs(state.fen);
-  const board = chessInstance.board();
-  
-  const pieceMap: Record<string, string> = {
-    "wk": "♔", "wq": "♕", "wr": "♖", "wb": "♗", "wn": "♘", "wp": "♙",
-    "bk": "♚", "bq": "♛", "br": "♜", "bb": "♝", "bn": "♞", "bp": "♟",
-  };
-  
-  let display = "  a b c d e f g h\n";
-  for (let row = 0; row < 8; row++) {
-    display += `${8 - row} `;
-    for (let col = 0; col < 8; col++) {
-      const piece = board[row][col];
-      if (piece) {
-        const key = piece.color + piece.type;
-        display += pieceMap[key] + " ";
-      } else {
-        display += ". ";
-      }
-    }
-    display += `${8 - row}\n`;
-  }
-  display += "  a b c d e f g h";
-  return display;
 }
 
 async function handleGameCommand(message: Message, gameType: string) {
@@ -393,7 +359,10 @@ async function handleGameCommand(message: Message, gameType: string) {
       matchmakingTimers.delete(playerId);
       
       const channel = message.channel as TextChannel;
-      await startPvPGame(channel, gameType, playerId, match.discordId);
+      const player1Info = { username: message.author.username, displayName: message.author.displayName };
+      const matchPlayer = await storage.getPlayer(match.discordId);
+      const player2Info = matchPlayer ? { username: matchPlayer.username, displayName: matchPlayer.displayName || undefined } : undefined;
+      await startPvPGame(channel, gameType, playerId, match.discordId, player1Info, player2Info);
     } else if (attempts < 12) {
       matchmakingTimers.set(playerId, setTimeout(findOpponent, 5000));
     } else {
@@ -420,7 +389,10 @@ async function handleAccept(message: Message) {
   await storage.getOrCreatePlayer(message.author.id, message.author.username, message.author.displayName);
   
   const channel = message.channel as TextChannel;
-  await startPvPGame(channel, challenge.gameType, challenge.challengerId, message.author.id);
+  const challengerPlayer = await storage.getPlayer(challenge.challengerId);
+  const player1Info = challengerPlayer ? { username: challengerPlayer.username, displayName: challengerPlayer.displayName || undefined } : undefined;
+  const player2Info = { username: message.author.username, displayName: message.author.displayName };
+  await startPvPGame(channel, challenge.gameType, challenge.challengerId, message.author.id, player1Info, player2Info);
 }
 
 async function handleSoloGame(message: Message, gameType: string) {
@@ -944,50 +916,6 @@ async function handleTextGameInput(message: Message) {
     }
   }
   
-  else if (game.gameType === "chess") {
-    if (state.currentTurn === "w" && playerId !== state.player1Id) return;
-    if (state.currentTurn === "b" && playerId !== state.player2Id) return;
-    
-    const move = content.replace(",move ", "").replace(",m ", "").trim();
-    const result = chess.makeMove(state, move);
-    
-    if (!result.success) {
-      await message.reply(result.error || "Invalid move.");
-      return;
-    }
-    
-    const status = chess.getGameStatus(state);
-    await storage.updateGameState(game.id, state, chess.getCurrentPlayerId(state));
-    
-    const player1Name = await getPlayerName(state.player1Id);
-    const player2Name = await getPlayerName(state.player2Id);
-    const currentPlayerName = await getPlayerName(chess.getCurrentPlayerId(state));
-    const chessBoard = createChessDisplay(state);
-    
-    if (status.over) {
-      if (status.winner) {
-        const loserId = status.winner === state.player1Id ? state.player2Id : state.player1Id;
-        await storage.recordGameResult(status.winner, "chess", "win");
-        await storage.recordGameResult(loserId, "chess", "loss");
-        await storage.awardWinCoins(status.winner);
-      }
-      
-      clearGameTimer(game.id);
-      await storage.endGame(game.id);
-      
-      const winnerName = status.winner ? await getPlayerName(status.winner) : null;
-      const resultText = status.result === "checkmate" 
-        ? `Checkmate! **${winnerName}** wins!`
-        : `Game ended in a ${status.result}!`;
-      
-      await message.channel.send(`♟️ **CHESS**\n${player1Name} (White) vs ${player2Name} (Black)\n\`\`\`\n${chessBoard}\n\`\`\`\n${resultText}`);
-      return;
-    }
-    
-    await message.channel.send(`♟️ **CHESS**\n${player1Name} (White) vs ${player2Name} (Black)\n\`\`\`\n${chessBoard}\n\`\`\`\nIt's **${currentPlayerName}**'s turn - Type your move (e.g., e4, Nf3)`);
-    resetGameTimer(game.id, message.channel as TextChannel);
-  }
-  
   else if (game.gameType === "wordle") {
     if (playerId !== state.playerId) return;
     
@@ -1170,9 +1098,6 @@ client.on(Events.MessageCreate, async (message: Message) => {
         case "wordduel":
         case "wd":
           await handleGameCommand(message, "wordduel");
-          break;
-        case "chess":
-          await handleGameCommand(message, "chess");
           break;
         case "minesweeper":
         case "ms":

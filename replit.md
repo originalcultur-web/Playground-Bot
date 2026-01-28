@@ -10,9 +10,8 @@ Playground offers competitive PvP and solo games with interactive button-based U
 
 ### PvP Ranked Games
 - **Connect 4** - Classic 4-in-a-row game (30s per turn)
-- **Tic Tac Toe** - Best of 3 ranked matches
+- **Tic Tac Toe** - Single game ranked matches
 - **Word Duel** - 5 scrambled words, first to unscramble wins point
-- **Chess** - Full chess with algebraic notation moves
 
 ### Solo Leaderboard Games
 - **Minesweeper** - 5x5 grid with interactive buttons
@@ -24,7 +23,6 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - `,connect4` / `,c4` - Queue for Connect 4 or challenge @user
 - `,tictactoe` / `,ttt` - Queue for Tic Tac Toe or challenge @user
 - `,wordduel` / `,wd` - Queue for Word Duel or challenge @user
-- `,chess` - Queue for Chess or challenge @user
 - `,minesweeper` / `,ms` - Start solo Minesweeper
 - `,wordle` / `,w` - Start solo Wordle
 
@@ -32,8 +30,7 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - `,quit` / `,q` - Forfeit current game or leave queue
 - `,accept` - Accept a challenge
 - **Tic Tac Toe & Connect 4** - Click buttons to play
-- **Minesweeper** - Click cells to reveal
-- **Chess** - Type moves in algebraic notation (e.g., e4, Nf3)
+- **Minesweeper** - Click cells to reveal, toggle flag mode
 - **Wordle & Word Duel** - Type your answers
 
 ### Profile & Stats
@@ -70,7 +67,6 @@ src/
 │   ├── connect4.ts   # Connect 4 game logic
 │   ├── tictactoe.ts  # Tic Tac Toe game logic
 │   ├── wordduel.ts   # Word Duel game logic
-│   ├── chess.ts      # Chess game logic
 │   ├── minesweeper.ts # Minesweeper game logic
 │   └── wordle.ts     # Wordle game logic
 shared/
