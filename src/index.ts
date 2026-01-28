@@ -139,24 +139,57 @@ async function handleProfile(message: Message, args: string[]) {
   
   let badge = "";
   let title = "";
+  let frame = "";
   
   if (player.equippedBadge) {
     const item = await storage.getShopItem(player.equippedBadge);
-    if (item) badge = item.emoji;
+    if (item) badge = item.emoji + " ";
   }
   if (player.equippedTitle) {
     const item = await storage.getShopItem(player.equippedTitle);
     if (item) title = ` [${item.name}]`;
   }
+  if (player.equippedFrame) {
+    const item = await storage.getShopItem(player.equippedFrame);
+    if (item) frame = ` ${item.emoji}`;
+  }
   
-  let profile = `${badge}**${player.displayName || player.username}**${title}
-@${player.username}
-
-Total Wins: ${player.totalWins}
-Total Losses: ${player.totalLosses}`;
+  let profile = `${badge}**${player.displayName || player.username}**${title}${frame}\n`;
+  profile += `@${player.username}\n\n`;
   
+  profile += `**Overall Stats**\n`;
+  profile += `🏆 ${player.totalWins}  💀 ${player.totalLosses}`;
   if (targetId === message.author.id) {
-    profile += `\nCoins: ${player.coins}`;
+    profile += `  💰 ${player.coins}`;
+  }
+  profile += `\n\n`;
+  
+  const pvpGames = ["tictactoe", "connect4", "wordduel"];
+  const soloGames = ["minesweeper", "wordle"];
+  const gameLabels: Record<string, string> = {
+    tictactoe: "Tic Tac Toe",
+    connect4: "Connect 4",
+    wordduel: "Word Duel",
+    minesweeper: "Minesweeper",
+    wordle: "Wordle"
+  };
+  
+  profile += `**PvP Rankings**\n`;
+  for (const game of pvpGames) {
+    const stats = await storage.getOrCreateGameStats(targetId, game);
+    if (stats.wins > 0 || stats.losses > 0) {
+      const streakText = stats.winStreak > 0 ? ` 🔥${stats.winStreak}` : "";
+      profile += `${gameLabels[game]}: ⭐${stats.eloRating} (${stats.wins}W/${stats.losses}L)${streakText}\n`;
+    }
+  }
+  
+  profile += `\n**Solo Games**\n`;
+  for (const game of soloGames) {
+    const stats = await storage.getOrCreateGameStats(targetId, game);
+    if (stats.wins > 0 || stats.losses > 0) {
+      const streakText = stats.bestStreak > 0 ? ` (Best: ${stats.bestStreak})` : "";
+      profile += `${gameLabels[game]}: ${stats.wins}W/${stats.losses}L${streakText}\n`;
+    }
   }
   
   await message.channel.send(profile);
@@ -863,6 +896,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     await storage.updateGameState(game.id, state);
     
     if (state.gameOver) {
+      const result = state.won ? "win" : "loss";
+      await storage.recordGameResult(state.playerId, "minesweeper", result);
+      clearLeaderboardCache("minesweeper");
       await storage.endGame(game.id);
     }
     
@@ -1034,6 +1070,9 @@ async function handleTextGameInput(message: Message) {
         await storage.updateGameState(game.id, state);
         
         if (state.gameOver) {
+          const result = state.won ? "win" : "loss";
+          await storage.recordGameResult(state.playerId, "wordle", result);
+          clearLeaderboardCache("wordle");
           await storage.endGame(game.id);
         }
         
