@@ -1121,36 +1121,13 @@ async function handleTextGameInput(message: Message) {
   if (game.gameType === "wordduel") {
     const result = wordduel.submitAnswer(state, playerId, content);
     
-    // Ignore if already answered or round complete
-    if (!result.accepted) return;
-    
-    const playerName = await getPlayerName(playerId);
-    const player1Name = await getPlayerName(state.player1Id);
-    const player2Name = await getPlayerName(state.player2Id);
-    
-    // Acknowledge the answer was locked in
-    await message.channel.send(`**${playerName}** locked in their answer!`);
-    await storage.updateGameState(game.id, state);
-    
-    // If both have answered, resolve the round
-    if (result.bothAnswered) {
-      const roundResult = wordduel.resolveRound(state);
+    if (result.correct && result.first) {
       const hasMore = wordduel.nextRound(state);
       await storage.updateGameState(game.id, state);
       
-      // Build round result message
-      let roundMsg = "";
-      if (roundResult.winnerId) {
-        const roundWinnerName = await getPlayerName(roundResult.winnerId);
-        if (roundResult.p1Correct && roundResult.p2Correct) {
-          roundMsg = `Both correct! **${roundWinnerName}** was faster!`;
-        } else {
-          roundMsg = `**${roundWinnerName}** got it right!`;
-        }
-      } else {
-        roundMsg = "Neither player got it right!";
-      }
-      roundMsg += ` The word was: **${roundResult.correctWord.toUpperCase()}**`;
+      const player1Name = await getPlayerName(state.player1Id);
+      const player2Name = await getPlayerName(state.player2Id);
+      const playerName = await getPlayerName(playerId);
       
       if (!hasMore || wordduel.isGameOver(state)) {
         const winner = wordduel.getWinner(state);
@@ -1168,18 +1145,19 @@ async function handleTextGameInput(message: Message) {
         clearGameTimer(game.id);
         await storage.endGame(game.id);
         
-        const finalWinnerName = winner ? await getPlayerName(winner) : null;
-        const resultText = finalWinnerName ? `**${finalWinnerName}** wins!${eloText}` : "It's a draw!";
+        const winnerName = winner ? await getPlayerName(winner) : null;
+        const resultText = winnerName ? `**${winnerName}** wins!${eloText}` : "It's a draw!";
         const rematchBtn = ui.createRematchButton("wordduel", state.player1Id, state.player2Id);
         await message.channel.send({
-          content: `${roundMsg}\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
+          content: `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
           components: [rematchBtn]
         });
         return;
       }
       
+      const previousWord = state.words[state.currentWordIndex - 1];
       const scrambled = state.scrambledWords[state.currentWordIndex].toUpperCase();
-      await message.channel.send(`${roundMsg}\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\nUnscramble: **${scrambled}**`);
+      await message.channel.send(`**${playerName}** got it! The word was: **${previousWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\nUnscramble: **${scrambled}**`);
       resetGameTimer(game.id, message.channel as TextChannel);
     }
   }
@@ -1269,6 +1247,69 @@ function startGameTimer(gameId: string, channel: TextChannel) {
     const game = await storage.getActiveGameById(gameId);
     if (!game) return;
     
+    // Special handling for Word Duel - skip round instead of forfeiting
+    if (game.gameType === "wordduel") {
+      const state = game.state as any;
+      
+      // Check if someone already answered correctly this round - if so, timer was already reset
+      const hasCorrectAnswer = Object.keys(state.roundAnswers).length > 0;
+      if (hasCorrectAnswer) {
+        // Round was already won and advanced, ignore this timer
+        gameTimers.delete(gameId);
+        return;
+      }
+      
+      // Check if game is already over
+      if (wordduel.isGameOver(state)) {
+        gameTimers.delete(gameId);
+        return;
+      }
+      
+      const player1Name = await getPlayerName(state.player1Id);
+      const player2Name = await getPlayerName(state.player2Id);
+      const currentWord = state.words[state.currentWordIndex];
+      
+      // Skip to next round (no one answered)
+      const hasMore = wordduel.nextRound(state);
+      await storage.updateGameState(game.id, state);
+      
+      if (!hasMore || wordduel.isGameOver(state)) {
+        // Game over
+        const winner = wordduel.getWinner(state);
+        let eloText = "";
+        if (winner) {
+          const loserId = winner === state.player1Id ? state.player2Id : state.player1Id;
+          const winnerName = await getPlayerName(winner);
+          const loserName = await getPlayerName(loserId);
+          const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
+          await storage.awardWinCoins(winner);
+          eloText = ` (+${winnerChange})`;
+          clearLeaderboardCache("wordduel");
+        }
+        
+        await storage.endGame(gameId);
+        gameTimers.delete(gameId);
+        
+        const winnerName = winner ? await getPlayerName(winner) : null;
+        const resultText = winnerName ? `**${winnerName}** wins!${eloText}` : "It's a draw!";
+        const rematchBtn = ui.createRematchButton("wordduel", state.player1Id, state.player2Id);
+        await sendToGameChannels(game, {
+          content: `Time's up! The word was: **${currentWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
+          components: [rematchBtn]
+        });
+        return;
+      }
+      
+      // Continue to next round
+      const scrambled = state.scrambledWords[state.currentWordIndex].toUpperCase();
+      await sendToGameChannels(game, { 
+        content: `Time's up! The word was: **${currentWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\nUnscramble: **${scrambled}**` 
+      });
+      gameTimers.delete(gameId);
+      startGameTimer(gameId, channel);
+      return;
+    }
+    
     const currentPlayerId = game.currentTurn;
     
     if (currentPlayerId && game.player2Id) {
@@ -1287,7 +1328,7 @@ function startGameTimer(gameId: string, channel: TextChannel) {
         await storage.recordGameResult(opponentId, game.gameType, "win");
       }
       await storage.awardWinCoins(opponentId);
-      await sendToGameChannels(game, { content: `⏰ **${timedOutName}** timed out. **${winnerName}** wins!${eloText}` });
+      await sendToGameChannels(game, { content: `**${timedOutName}** timed out. **${winnerName}** wins!${eloText}` });
     }
     
     await storage.endGame(gameId);
