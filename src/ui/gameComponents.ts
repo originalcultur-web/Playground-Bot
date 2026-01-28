@@ -326,3 +326,13 @@ export function createQuitButton(gameId: string) {
         .setStyle(ButtonStyle.Danger)
     );
 }
+
+export function createRematchButton(gameType: string, opponentId: string) {
+  return new ActionRowBuilder<ButtonBuilder>()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`rematch_${gameType}_${opponentId}`)
+        .setLabel("Rematch")
+        .setStyle(ButtonStyle.Primary)
+    );
+}

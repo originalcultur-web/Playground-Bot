@@ -192,6 +192,16 @@ async function handleProfile(message: Message, args: string[]) {
     }
   }
   
+  const matches = await storage.getMatchHistory(targetId, 5);
+  if (matches.length > 0) {
+    profile += `\n**Recent Matches**\n`;
+    for (const match of matches) {
+      const resultIcon = match.result === "win" ? "W" : "L";
+      const eloText = match.eloChange > 0 ? `+${match.eloChange}` : `${match.eloChange}`;
+      profile += `${resultIcon} vs ${match.opponentName} (${gameLabels[match.gameType] || match.gameType}) ${eloText}\n`;
+    }
+  }
+  
   await message.channel.send(profile);
 }
 
@@ -624,7 +634,7 @@ async function handleQuit(message: Message) {
     const opponentName = await getPlayerName(opponentId);
     
     if (PVP_GAMES.includes(game.gameType)) {
-      const { winnerChange } = await storage.recordPvPResult(opponentId, playerId, game.gameType);
+      const { winnerChange } = await storage.recordPvPResult(opponentId, playerId, game.gameType, opponentName, playerName);
       clearLeaderboardCache(game.gameType);
       await storage.awardWinCoins(opponentId);
       await storage.recordForfeit(playerId);
@@ -688,7 +698,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         
         let eloText = "";
         if (matchResult.winner) {
-          const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "tictactoe");
+          const winnerName = await getPlayerName(winnerId);
+          const loserName = await getPlayerName(loserId);
+          const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
           await storage.awardWinCoins(winnerId);
           eloText = ` (+${winnerChange} ⭐)`;
           clearLeaderboardCache("tictactoe");
@@ -699,6 +711,8 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         
         const winnerName = await getPlayerName(winnerId);
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
+        const rematchBtn = ui.createRematchButton("tictactoe", loserId);
+        buttons.push(rematchBtn);
         const scoreText = state.maxRounds > 1 ? `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
         const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🏆 **${winnerName}** wins the match!${eloText}`;
         
@@ -727,6 +741,8 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         await storage.endGame(game.id);
         
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
+        const rematchBtn = ui.createRematchButton("tictactoe", state.player2Id);
+        buttons.push(rematchBtn);
         const scoreText = `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
         const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🤝 Match ended in a draw!`;
         
@@ -795,7 +811,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const winnerId = connect4.getCurrentPlayerId(state);
       const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
       
-      const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "connect4");
+      const winnerName = await getPlayerName(winnerId);
+      const loserName = await getPlayerName(loserId);
+      const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
       await storage.awardWinCoins(winnerId);
       clearLeaderboardCache("connect4");
       
@@ -804,6 +822,8 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       
       const winnerName = await getPlayerName(winnerId);
       const buttons = ui.createConnect4Board(state, game.id, true);
+      const rematchBtn = ui.createRematchButton("connect4", loserId);
+      buttons.push(rematchBtn);
       const content = `**CONNECT 4**\n\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🏆 **${winnerName}** wins! (+${winnerChange} ⭐)`;
       
       await interaction.deferUpdate();
@@ -816,6 +836,8 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.endGame(game.id);
       
       const buttons = ui.createConnect4Board(state, game.id, true);
+      const rematchBtn = ui.createRematchButton("connect4", state.player2Id);
+      buttons.push(rematchBtn);
       const content = `**CONNECT 4**\n\n${player1Name} (🔴) vs ${player2Name} (🟡)\n\n${display}\n\n🤝 It's a draw!`;
       
       await interaction.deferUpdate();
@@ -947,7 +969,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       
       let eloText = "";
       if (PVP_GAMES.includes(game.gameType)) {
-        const { winnerChange } = await storage.recordPvPResult(opponentId, userId, game.gameType);
+        const { winnerChange } = await storage.recordPvPResult(opponentId, userId, game.gameType, opponentName, userName);
         eloText = ` (+${winnerChange} ⭐)`;
         clearLeaderboardCache(game.gameType);
       } else {
@@ -969,6 +991,46 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     }
     
     await storage.endGame(game.id);
+  }
+  
+  else if (customId.startsWith("rematch_")) {
+    const parts = customId.split("_");
+    const gameType = parts[1];
+    const opponentId = parts[2];
+    
+    const challengerId = userId;
+    const channelId = interaction.channelId;
+    
+    const existingGame = await storage.getActiveGameForPlayer(challengerId);
+    if (existingGame) {
+      await interaction.reply({ content: "You're already in a game!", ephemeral: true });
+      return;
+    }
+    
+    const opponentGame = await storage.getActiveGameForPlayer(opponentId);
+    if (opponentGame) {
+      await interaction.reply({ content: "Your opponent is in another game.", ephemeral: true });
+      return;
+    }
+    
+    const existingChallenge = await storage.getPendingChallenge(challengerId, opponentId);
+    if (existingChallenge) {
+      await interaction.reply({ content: "You already have a pending challenge to this player.", ephemeral: true });
+      return;
+    }
+    
+    await storage.createChallenge(challengerId, opponentId, gameType, channelId);
+    const challengerName = await getPlayerName(challengerId);
+    
+    const gameNames: Record<string, string> = {
+      tictactoe: "Tic Tac Toe",
+      connect4: "Connect 4",
+      wordduel: "Word Duel"
+    };
+    
+    await interaction.reply({ 
+      content: `**${challengerName}** wants a rematch in ${gameNames[gameType] || gameType}!\n<@${opponentId}>, type \`,accept\` to accept.`
+    });
   }
 }
 
@@ -1038,7 +1100,9 @@ async function handleTextGameInput(message: Message) {
         let eloText = "";
         if (winner) {
           const loserId = winner === state.player1Id ? state.player2Id : state.player1Id;
-          const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel");
+          const winnerName = await getPlayerName(winner);
+          const loserName = await getPlayerName(loserId);
+          const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
           await storage.awardWinCoins(winner);
           eloText = ` (+${winnerChange} ⭐)`;
           clearLeaderboardCache("wordduel");
@@ -1150,9 +1214,12 @@ function startGameTimer(gameId: string, channel: TextChannel) {
     if (currentPlayerId && game.player2Id) {
       const opponentId = currentPlayerId === game.player1Id ? game.player2Id : game.player1Id;
       
+      const timedOutName = await getPlayerName(currentPlayerId);
+      const winnerName = await getPlayerName(opponentId);
+      
       let eloText = "";
       if (PVP_GAMES.includes(game.gameType)) {
-        const { winnerChange } = await storage.recordPvPResult(opponentId, currentPlayerId, game.gameType);
+        const { winnerChange } = await storage.recordPvPResult(opponentId, currentPlayerId, game.gameType, winnerName, timedOutName);
         eloText = ` (+${winnerChange} ⭐)`;
         clearLeaderboardCache(game.gameType);
       } else {
@@ -1160,9 +1227,6 @@ function startGameTimer(gameId: string, channel: TextChannel) {
         await storage.recordGameResult(opponentId, game.gameType, "win");
       }
       await storage.awardWinCoins(opponentId);
-      
-      const timedOutName = await getPlayerName(currentPlayerId);
-      const winnerName = await getPlayerName(opponentId);
       await sendToGameChannels(game, { content: `⏰ **${timedOutName}** timed out. **${winnerName}** wins!${eloText}` });
     }
     
