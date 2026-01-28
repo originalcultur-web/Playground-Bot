@@ -100,7 +100,7 @@ export function renderBoard(state: WordleState): string {
   
   const remaining = state.maxGuesses - state.guesses.length;
   for (let i = 0; i < remaining; i++) {
-    display += "⬜⬜⬜⬜⬜\n";
+    display += "🔲🔲🔲🔲🔲\n";
   }
   
   display += `\nGuesses: ${state.guesses.length}/${state.maxGuesses}`;

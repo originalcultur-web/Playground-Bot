@@ -604,7 +604,7 @@ async function handleSoloGame(message: Message, gameType: string) {
     
     const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬛ = Letter not in word`;
     sentMessage = await message.channel.send({
-      content: `**WORDLE**\n\n${wordleGuide}\n\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n⬜⬜⬜⬜⬜\n\nGuesses: 0/6\nType a 5-letter word to guess!`
+      content: `**WORDLE**\n\n${wordleGuide}\n\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n\nGuesses: 0/6\nType a 5-letter word to guess!`
     });
     
     if (sentMessage) {
@@ -1196,7 +1196,7 @@ async function handleTextGameInput(message: Message) {
         }
         const remaining = state.maxGuesses - state.guesses.length;
         for (let i = 0; i < remaining; i++) {
-          display += "⬜⬜⬜⬜⬜\n";
+          display += "🔲🔲🔲🔲🔲\n";
         }
         display += `\nGuesses: ${state.guesses.length}/${state.maxGuesses}`;
         
