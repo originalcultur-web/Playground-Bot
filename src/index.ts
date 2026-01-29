@@ -1,18 +1,6 @@
 import http from "http";
-
-const healthServer = http.createServer((req, res) => {
-  if (req.url === "/" || req.url === "/health") {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("OK");
-  } else {
-    res.writeHead(200, { "Content-Type": "text/plain" });
-    res.end("Playground Bot is running!");
-  }
-});
-healthServer.listen(5000, "0.0.0.0", () => {
-  console.log("Health check server running on port 5000");
-});
-
+import { exec } from "child_process";
+import { promisify } from "util";
 import "dotenv/config";
 import { 
   Client, 
@@ -29,6 +17,41 @@ import * as tictactoe from "./games/tictactoe.js";
 import * as wordduel from "./games/wordduel.js";
 import * as wordle from "./games/wordle.js";
 import * as ui from "./ui/gameComponents.js";
+
+const execAsync = promisify(exec);
+
+const healthServer = http.createServer((req, res) => {
+  if (req.url === "/" || req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("OK");
+  } else {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("Playground Bot is running!");
+  }
+});
+healthServer.listen(5000, "0.0.0.0", () => {
+  console.log("Health check server running on port 5000");
+  initializeBot();
+});
+
+async function initializeBot() {
+  try {
+    console.log("Pushing database schema...");
+    const { stdout, stderr } = await execAsync("npx drizzle-kit push");
+    console.log(stdout);
+    if (stderr) console.error(stderr);
+  } catch (e) {
+    console.error("Database push warning:", e);
+  }
+  
+  await startDiscordBot();
+}
+
+async function startDiscordBot() {
+  await storage.seedShopItems();
+  console.log("Starting Discord bot...");
+  client.login(process.env.DISCORD_BOT_TOKEN);
+}
 
 const PREFIX = ",";
 const AFK_TIMEOUT = 60000;
@@ -1571,7 +1594,6 @@ function clearGameTimer(gameId: string) {
 
 client.on(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user?.tag}`);
-  await storage.seedShopItems();
   console.log("Bot is ready!");
   
   setInterval(async () => {
@@ -1702,10 +1724,3 @@ client.on(Events.MessageCreate, async (message: Message) => {
   }
 });
 
-const token = process.env.DISCORD_BOT_TOKEN;
-if (!token) {
-  console.error("DISCORD_BOT_TOKEN is not set");
-  process.exit(1);
-}
-
-client.login(token);
