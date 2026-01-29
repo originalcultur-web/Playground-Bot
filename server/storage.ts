@@ -866,3 +866,40 @@ export async function getAllEmojis(): Promise<Record<string, { current: string; 
 export function getDefaultEmojis(): Record<string, string> {
   return { ...DEFAULT_EMOJIS };
 }
+
+export async function resetEntireBot(): Promise<{ players: number; games: number; matches: number }> {
+  const matchCount = await db.delete(matchHistory);
+  const gameStatsCount = await db.delete(gameStats);
+  await db.delete(activeGames);
+  await db.delete(matchmakingQueue);
+  await db.delete(pendingChallenges);
+  await db.delete(recentOpponents);
+  await db.delete(userInventory);
+  
+  const playerCount = await db.update(players).set({
+    coins: 0,
+    coinsEarnedToday: 0,
+    totalWins: 0,
+    totalLosses: 0,
+    dailyStreak: 0,
+    lastPlayedDate: null,
+    equippedBadge: null,
+    equippedTitle: null,
+    equippedFrame: null,
+    forfeitCount: 0,
+    lastForfeitTime: null,
+    queueLockedUntil: null,
+  });
+  
+  return {
+    players: playerCount.rowCount || 0,
+    games: gameStatsCount.rowCount || 0,
+    matches: matchCount.rowCount || 0,
+  };
+}
+
+export async function cleanExpiredQueues(maxAgeMinutes: number = 5): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+  const result = await db.delete(matchmakingQueue).where(sql`${matchmakingQueue.queuedAt} < ${cutoff}`);
+  return result.rowCount || 0;
+}

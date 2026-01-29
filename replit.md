@@ -38,15 +38,20 @@ Playground offers competitive PvP and solo games with interactive button-based U
 ### Shop (Coming Soon)
 - `,shop` - Preview cosmetic shop
 
-### Staff Commands
+### Staff Commands (use `,staffhelp` for private list)
+- `,staffhelp` - View staff commands (sent via DM)
 - `,staff` - View staff team
 - `,promote @user <admin/mod/support>` - Promote to staff (Admin+)
 - `,demote @user` - Remove from staff (Admin+)
 - `,resetplayer @user [game]` - Reset player stats (Mod+)
 - `,resetgame <game>` - Reset game leaderboard (Admin+)
+- `,resetbot` - Reset entire bot (Owner only, requires confirmation)
 - `,setemoji <type> <emoji>` - Set custom emoji (Owner only)
 - `,listemojis` - View all emojis (Staff only)
 - `,resetemoji <type>` - Reset emoji to default (Owner only)
+
+### Other Commands
+- `,rules <game>` - How to play a specific game
 
 ## Staff System
 

@@ -138,35 +138,17 @@ async function handleHelp(message: Message) {
 \`,profile\` - View your profile
 \`,leaderboard <game>\` - View leaderboard
 \`,staff\` - View staff team
+\`,rules <game>\` - How to play a game
 
 **Shop (Coming Soon):**
 \`,shop\` - Preview cosmetic shop
 
 \`,accept\` - Accept a challenge`;
 
-  if (staffRole && storage.getStaffLevel(staffRole) >= 2) {
-    help += `
-
-**Staff Commands:**
-\`,resetplayer @user [game]\` - Reset player stats`;
-  }
-  
-  if (staffRole && storage.getStaffLevel(staffRole) >= 3) {
-    help += `
-\`,resetgame <game>\` - Reset game leaderboard
-\`,promote @user <role>\` - Promote to staff
-\`,demote @user\` - Remove from staff`;
-  }
-  
   if (staffRole) {
     help += `
-\`,listemojis\` - View all emoji settings`;
-  }
-  
-  if (storage.isOwner(message.author.id)) {
-    help += `
-\`,setemoji <type> <emoji>\` - Set custom emoji
-\`,resetemoji <type>\` - Reset emoji to default`;
+
+*Use \`,staffhelp\` for staff commands (only you can see)*`;
   }
   
   await message.channel.send(help);
@@ -520,6 +502,99 @@ async function handleResetGame(message: Message, args: string[]) {
   leaderboardCache.clear();
 }
 
+const resetConfirmations = new Map<string, { timestamp: number }>();
+
+async function handleResetBot(message: Message) {
+  if (!storage.isOwner(message.author.id)) {
+    return;
+  }
+  
+  const existing = resetConfirmations.get(message.author.id);
+  if (existing && Date.now() - existing.timestamp < 30000) {
+    resetConfirmations.delete(message.author.id);
+    const result = await storage.resetEntireBot();
+    await message.channel.send(`Bot reset complete.\n- ${result.players} players reset\n- ${result.games} game stats cleared\n- ${result.matches} match history entries removed`);
+    leaderboardCache.clear();
+    return;
+  }
+  
+  resetConfirmations.set(message.author.id, { timestamp: Date.now() });
+  await message.channel.send("**WARNING:** This will reset ALL player stats, coins, rankings, and match history.\n\nType `,resetbot` again within 30 seconds to confirm.");
+}
+
+async function handleStaffHelp(message: Message) {
+  const staffRole = await storage.getStaffRole(message.author.id);
+  if (!staffRole) {
+    return;
+  }
+  
+  let help = `**Staff Commands** (Only you can see this)\n`;
+  
+  if (storage.getStaffLevel(staffRole) >= 2) {
+    help += `\n**Moderator:**\n\`,resetplayer @user [game]\` - Reset player stats`;
+  }
+  
+  if (storage.getStaffLevel(staffRole) >= 3) {
+    help += `\n\n**Admin:**\n\`,resetgame <game>\` - Reset game leaderboard\n\`,promote @user <role>\` - Promote to staff (admin/mod/support)\n\`,demote @user\` - Remove from staff`;
+  }
+  
+  if (storage.isOwner(message.author.id)) {
+    help += `\n\n**Owner:**\n\`,setemoji <type> <emoji>\` - Set custom emoji\n\`,resetemoji <type>\` - Reset emoji to default\n\`,resetbot\` - Reset entire bot (all stats)`;
+  }
+  
+  help += `\n\n**All Staff:**\n\`,listemojis\` - View all emoji settings\n\`,staff\` - View staff team`;
+  
+  try {
+    await message.author.send(help);
+    await message.reply("Check your DMs for staff commands.");
+  } catch (e) {
+    await message.reply(help + "\n\n*(Enable DMs for private messages)*");
+  }
+}
+
+async function handleRules(message: Message, args: string[]) {
+  const game = args[0]?.toLowerCase();
+  
+  const rules: Record<string, string> = {
+    connect4: `**Connect 4 Rules**
+- Take turns dropping pieces into columns
+- First to get 4 in a row (horizontal, vertical, or diagonal) wins
+- Click the column buttons to play
+- 30 seconds per turn
+- Ranked game with Elo rating`,
+    
+    tictactoe: `**Tic Tac Toe Rules**
+- Take turns placing X or O on the 3x3 grid
+- First to get 3 in a row (horizontal, vertical, or diagonal) wins
+- Click the position buttons to play
+- Ranked game with Elo rating`,
+    
+    wordduel: `**Word Duel Rules**
+- 5 rounds of scrambled words
+- First to unscramble each word scores a point
+- Type the unscrambled word to answer
+- Player with most points wins
+- "3... 2... 1... GO!" countdown before each round
+- Ranked game with Elo rating`,
+    
+    wordle: `**Wordle Rules**
+- Guess the 5-letter word in 6 attempts
+- Type your guess as a message
+- After each guess:
+  - Green letter = correct position
+  - Yellow letter = wrong position
+  - Gray letter = not in word
+- Solo game, wins count toward leaderboard`,
+  };
+  
+  if (!game || !rules[game]) {
+    await message.channel.send(`Usage: \`,rules <game>\`\nGames: connect4, tictactoe, wordduel, wordle`);
+    return;
+  }
+  
+  await message.channel.send(rules[game]);
+}
+
 async function handleSetEmoji(message: Message, args: string[]) {
   if (!storage.isOwner(message.author.id)) {
     await message.channel.send("Only the owner can customize emojis.");
@@ -726,6 +801,8 @@ async function handleGameCommand(message: Message, gameType: string) {
       try { await searchingMsg.delete(); } catch (e) {}
       
       const channel = message.channel as TextChannel;
+      await channel.send(`<@${playerId}> vs <@${match.discordId}> - Match found! Starting **${gameType.toUpperCase()}**...`);
+      
       const player1Info = { username: message.author.username, displayName: message.author.displayName };
       const matchPlayer = await storage.getPlayer(match.discordId);
       const player2Info = matchPlayer ? { username: matchPlayer.username, displayName: matchPlayer.displayName || undefined } : undefined;
@@ -1496,6 +1573,13 @@ client.on(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user?.tag}`);
   await storage.seedShopItems();
   console.log("Bot is ready!");
+  
+  setInterval(async () => {
+    const cleaned = await storage.cleanExpiredQueues(5);
+    if (cleaned > 0) {
+      console.log(`Cleaned ${cleaned} expired queue entries`);
+    }
+  }, 60000);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -1586,6 +1670,15 @@ client.on(Events.MessageCreate, async (message: Message) => {
           break;
         case "resetgame":
           await handleResetGame(message, args);
+          break;
+        case "resetbot":
+          await handleResetBot(message);
+          break;
+        case "staffhelp":
+          await handleStaffHelp(message);
+          break;
+        case "rules":
+          await handleRules(message, args);
           break;
         case "setemoji":
           await handleSetEmoji(message, args);
