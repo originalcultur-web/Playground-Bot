@@ -32,8 +32,8 @@ waitForPort = 5000
 
 [deployment]
 deploymentTarget = "vm"
-run = ["npm", "run", "start"]
 build = ["npm", "run", "db:push"]
+run = ["npm", "run", "start"]
 
 [[ports]]
 localPort = 5000
