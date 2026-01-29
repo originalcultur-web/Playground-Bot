@@ -121,7 +121,9 @@ async function syncGameMessages(game: any, content: string, components?: any[]):
 }
 
 async function handleHelp(message: Message) {
-  const help = `**PLAYGROUND - Commands**
+  const staffRole = await storage.getStaffRole(message.author.id);
+  
+  let help = `**PLAYGROUND - Commands**
 
 **Games:**
 \`,connect4\` - Play Connect 4 (queue or @user)
@@ -135,11 +137,38 @@ async function handleHelp(message: Message) {
 **Profile & Stats:**
 \`,profile\` - View your profile
 \`,leaderboard <game>\` - View leaderboard
+\`,staff\` - View staff team
 
 **Shop (Coming Soon):**
 \`,shop\` - Preview cosmetic shop
 
 \`,accept\` - Accept a challenge`;
+
+  if (staffRole && storage.getStaffLevel(staffRole) >= 2) {
+    help += `
+
+**Staff Commands:**
+\`,resetplayer @user [game]\` - Reset player stats`;
+  }
+  
+  if (staffRole && storage.getStaffLevel(staffRole) >= 3) {
+    help += `
+\`,resetgame <game>\` - Reset game leaderboard
+\`,promote @user <role>\` - Promote to staff
+\`,demote @user\` - Remove from staff`;
+  }
+  
+  if (staffRole) {
+    help += `
+\`,listemojis\` - View all emoji settings`;
+  }
+  
+  if (storage.isOwner(message.author.id)) {
+    help += `
+\`,setemoji <type> <emoji>\` - Set custom emoji
+\`,resetemoji <type>\` - Reset emoji to default`;
+  }
+  
   await message.channel.send(help);
 }
 
@@ -162,6 +191,7 @@ async function handleProfile(message: Message, args: string[]) {
   let badge = "";
   let title = "";
   let frame = "";
+  let staffBadge = "";
   
   if (player.equippedBadge) {
     const item = await storage.getShopItem(player.equippedBadge);
@@ -176,7 +206,19 @@ async function handleProfile(message: Message, args: string[]) {
     if (item) frame = ` ${item.emoji}`;
   }
   
-  let profile = `${badge}**${player.displayName || player.username}**${title}${frame}\n`;
+  const staffRole = await storage.getStaffRole(targetId);
+  if (staffRole) {
+    const emojis = await storage.loadEmojis();
+    const roleNames: Record<string, string> = {
+      owner: "Owner",
+      admin: "Admin",
+      mod: "Moderator",
+      support: "Support"
+    };
+    staffBadge = ` ${emojis[staffRole]} ${roleNames[staffRole]}`;
+  }
+  
+  let profile = `${badge}**${player.displayName || player.username}**${title}${frame}${staffBadge}\n`;
   profile += `@${player.username}\n\n`;
   
   profile += `**Overall Stats**\n`;
@@ -391,7 +433,7 @@ async function handlePromote(message: Message, args: string[]) {
   await storage.setStaffRole(mention.id, targetRole);
   
   const emojis = await storage.loadEmojis();
-  const roleEmoji = emojis[targetRole] || "";
+  const roleEmoji = targetRole ? emojis[targetRole] || "" : "";
   await message.channel.send(`${roleEmoji} **${mention.displayName || mention.username}** has been promoted to **${targetRole}**!`);
 }
 

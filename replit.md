@@ -38,6 +38,29 @@ Playground offers competitive PvP and solo games with interactive button-based U
 ### Shop (Coming Soon)
 - `,shop` - Preview cosmetic shop
 
+### Staff Commands
+- `,staff` - View staff team
+- `,promote @user <admin/mod/support>` - Promote to staff (Admin+)
+- `,demote @user` - Remove from staff (Admin+)
+- `,resetplayer @user [game]` - Reset player stats (Mod+)
+- `,resetgame <game>` - Reset game leaderboard (Admin+)
+- `,setemoji <type> <emoji>` - Set custom emoji (Owner only)
+- `,listemojis` - View all emojis (Staff only)
+- `,resetemoji <type>` - Reset emoji to default (Owner only)
+
+## Staff System
+
+### Hierarchy (4 Tiers)
+1. **👑 Owner** - Spit (permanent) - Full control, emoji customization
+2. **⚔️ Admin** - Reset players/games, manage mods/support
+3. **🛡️ Moderator** - Reset individual player stats
+4. **💬 Support** - View player info
+
+### Features
+- Staff badges displayed on profiles
+- Permission-based command access
+- 19 customizable emoji types (owner only)
+
 ## Economy System
 
 - **Coins** - Single in-app currency

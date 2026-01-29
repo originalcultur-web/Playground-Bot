@@ -709,11 +709,35 @@ export async function getAllStaff(): Promise<Array<{ player: Player; role: Staff
   
   const result: Array<{ player: Player; role: StaffRole }> = [];
   
-  const owner = await db.query.players.findFirst({
+  let owner = await db.query.players.findFirst({
     where: eq(players.discordId, OWNER_DISCORD_ID),
   });
+  
   if (owner) {
     result.push({ player: owner, role: "owner" });
+  } else {
+    const ownerPlaceholder: Player = {
+      id: 0,
+      discordId: OWNER_DISCORD_ID,
+      username: "6oa4",
+      displayName: "Spit",
+      coins: 0,
+      coinsEarnedToday: 0,
+      lastCoinReset: null,
+      totalWins: 0,
+      totalLosses: 0,
+      dailyStreak: 0,
+      lastPlayedDate: null,
+      equippedBadge: null,
+      equippedTitle: null,
+      equippedFrame: null,
+      forfeitCount: 0,
+      lastForfeitTime: null,
+      queueLockedUntil: null,
+      staffRole: "owner",
+      createdAt: new Date(),
+    };
+    result.push({ player: ownerPlaceholder, role: "owner" });
   }
   
   for (const p of staffPlayers) {
