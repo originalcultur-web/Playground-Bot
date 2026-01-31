@@ -68,9 +68,8 @@ Playground offers competitive PvP and solo games with interactive button-based U
 
 ## Economy System
 
-- **Coins** - Single in-app currency
-- Earn 5 coins per ranked win (50 daily cap)
-- Spend coins in the shop (coming soon)
+- **Coins** - Single in-app currency (currently disabled until shop is ready)
+- Coin rewards will be re-enabled when the shop feature launches
 
 ## Ranking System
 
@@ -146,15 +145,17 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
+- **Cross-Server Fixes** - Word Duel now properly updates both player channels when matched across servers
+- **Direct Challenges Same-Server Only** - Direct @user challenges must be accepted in the same server
+- **Match Found Notification** - Cross-server queue matches now notify both player channels
+- **Coin Rewards Disabled** - Coin awards temporarily disabled until shop is ready
 - **Minesweeper Removed** - Game removed from bot
 - **Shop Disabled** - Coming soon with unique cosmetic items
-- **Unified Coin System** - All coin awards handled internally in storage layer
 - **Daily Streak Counter** - Tracks consecutive days of play, displayed on profile
 - **Rank Badge System** - 5 visual tiers displayed on PvP rankings (Bronze/Silver/Gold/Diamond/Champion)
 - **Wordle Keyboard** - Shows used letters with grouped status format after each guess
 - **GG Button** - Sportsmanship button appears alongside rematch after PvP games
 - **Word Duel Countdown** - "3... 2... 1... GO!" animation before each round
-- **Coin Animations** - Delayed celebratory coin message appears after all game wins
 - **Win Emojis** - 🎉 emoji added to all win announcements
 - **Match History** - Profile now shows last 5 matches with opponent, result, and Elo change
 - **Rematch Button** - PvP games now show a rematch button after game ends
