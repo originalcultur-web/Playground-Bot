@@ -38,18 +38,6 @@ async function getPlayerName(discordId: string): Promise<string> {
   return player?.displayName || player?.username || "Unknown";
 }
 
-async function sendCoinAnimation(channel: TextChannel, coinsEarned: number, playerId: string): Promise<void> {
-  if (coinsEarned <= 0) return;
-  
-  setTimeout(async () => {
-    try {
-      await channel.send(`<@${playerId}> earned **+${coinsEarned}** 🪙`);
-    } catch (e) {
-      // Ignore if channel is unavailable
-    }
-  }, 1500);
-}
-
 async function sendToGameChannels(game: any, messageOptions: any) {
   const channels: TextChannel[] = [];
   
@@ -756,7 +744,7 @@ async function handleGameCommand(message: Message, gameType: string) {
       return;
     }
     
-    await storage.createChallenge(playerId, challenged.id, gameType, message.channel.id);
+    await storage.createChallenge(playerId, challenged.id, gameType, message.channel.id, message.guildId || undefined);
     const challengerName = await getPlayerName(playerId);
     await message.channel.send(`**${challenged.displayName || challenged.username}**, you've been challenged to **${gameType.toUpperCase()}** by **${challengerName}**!\nType \`,accept\` to play.`);
     return;
@@ -786,7 +774,18 @@ async function handleGameCommand(message: Message, gameType: string) {
       try { await searchingMsg.delete(); } catch (e) {}
       
       const channel = message.channel as TextChannel;
-      await channel.send(`<@${playerId}> vs <@${match.discordId}> - Match found! Starting **${gameType.toUpperCase()}**...`);
+      const matchFoundMsg = `<@${playerId}> vs <@${match.discordId}> - Match found! Starting **${gameType.toUpperCase()}**...`;
+      await channel.send(matchFoundMsg);
+      
+      // Send match found notification to opponent's channel if different
+      if (match.channelId && match.channelId !== channel.id) {
+        try {
+          const player2Channel = await client.channels.fetch(match.channelId) as TextChannel;
+          if (player2Channel) {
+            await player2Channel.send(matchFoundMsg);
+          }
+        } catch (e) {}
+      }
       
       const player1Info = { username: message.author.username, displayName: message.author.displayName };
       const matchPlayer = await storage.getPlayer(match.discordId);
@@ -813,7 +812,14 @@ async function handleAccept(message: Message) {
     return;
   }
   
-  const challenge = allChallenges[0];
+  // Find a challenge from the same server
+  const currentGuildId = message.guildId;
+  const challenge = allChallenges.find(c => c.guildId === currentGuildId) || null;
+  
+  if (!challenge) {
+    await message.channel.send("You have no pending challenges in this server.");
+    return;
+  }
   
   const challengerPlayer = await storage.getPlayer(challenge.challengerId);
   if (!challengerPlayer) {
@@ -967,13 +973,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         if (matchResult.winner) {
           const winnerName = await getPlayerName(winnerId);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange, coinsEarned } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
+          const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
           eloText = ` (+${winnerChange})`;
           clearLeaderboardCache("tictactoe");
-          
-          if (coinsEarned > 0 && interaction.channel) {
-            sendCoinAnimation(interaction.channel as TextChannel, coinsEarned, winnerId);
-          }
         }
         
         clearGameTimer(game.id);
@@ -1083,12 +1085,8 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       
       const winnerName = await getPlayerName(winnerId);
       const loserName = await getPlayerName(loserId);
-      const { winnerChange, coinsEarned } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
+      const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
       clearLeaderboardCache("connect4");
-      
-      if (coinsEarned > 0 && interaction.channel) {
-        sendCoinAnimation(interaction.channel as TextChannel, coinsEarned, winnerId);
-      }
       
       clearGameTimer(game.id);
       await storage.endGame(game.id);
@@ -1268,13 +1266,9 @@ async function handleTextGameInput(message: Message) {
           const loserId = winner === state.player1Id ? state.player2Id : state.player1Id;
           const winnerName = await getPlayerName(winner);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange, coinsEarned } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
+          const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
           eloText = ` (+${winnerChange})`;
           clearLeaderboardCache("wordduel");
-          
-          if (coinsEarned > 0) {
-            sendCoinAnimation(message.channel as TextChannel, coinsEarned, winner);
-          }
         }
         
         clearGameTimer(game.id);
@@ -1283,7 +1277,7 @@ async function handleTextGameInput(message: Message) {
         const winnerName = winner ? await getPlayerName(winner) : null;
         const resultText = winnerName ? `🎉 **${winnerName}** wins!${eloText}` : "It's a draw!";
         const rematchBtn = ui.createRematchButton("wordduel", state.player1Id, state.player2Id);
-        await message.channel.send({
+        await sendToGameChannels(game, {
           content: `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
           components: [rematchBtn]
         });
@@ -1292,7 +1286,7 @@ async function handleTextGameInput(message: Message) {
       
       const previousWord = state.words[state.currentWordIndex - 1];
       const scrambled = state.scrambledWords[state.currentWordIndex].toUpperCase();
-      await message.channel.send(`**${playerName}** got it! The word was: **${previousWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**`);
+      await sendToGameChannels(game, { content: `**${playerName}** got it! The word was: **${previousWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**` });
       resetGameTimer(game.id, message.channel as TextChannel);
     }
   }
@@ -1308,13 +1302,9 @@ async function handleTextGameInput(message: Message) {
         
         if (state.gameOver) {
           const result = state.won ? "win" : "loss";
-          const coinsEarned = await storage.recordGameResult(state.playerId, "wordle", result);
+          await storage.recordGameResult(state.playerId, "wordle", result);
           clearLeaderboardCache("wordle");
           await storage.endGame(game.id);
-          
-          if (state.won && coinsEarned > 0) {
-            sendCoinAnimation(message.channel as TextChannel, coinsEarned, state.playerId);
-          }
         }
         
         const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬛ = Letter not in word`;

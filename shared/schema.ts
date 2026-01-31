@@ -98,6 +98,7 @@ export const pendingChallenges = pgTable("pending_challenges", {
   challengedId: text("challenged_id").notNull(),
   gameType: text("game_type").notNull(),
   channelId: text("channel_id").notNull(),
+  guildId: text("guild_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

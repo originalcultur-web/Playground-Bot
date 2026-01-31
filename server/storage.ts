@@ -84,28 +84,8 @@ export async function updatePlayerCoins(discordId: string, amount: number): Prom
 }
 
 export async function awardWinCoins(discordId: string): Promise<number> {
-  const player = await getPlayer(discordId);
-  if (!player) return 0;
-  
-  const now = new Date();
-  const lastReset = player.lastCoinReset ? new Date(player.lastCoinReset) : new Date(0);
-  const isNewDay = now.toDateString() !== lastReset.toDateString();
-  
-  let coinsEarnedToday = isNewDay ? 0 : player.coinsEarnedToday;
-  
-  if (coinsEarnedToday >= DAILY_COIN_CAP) return 0;
-  
-  const coinsToAward = Math.min(COINS_PER_WIN, DAILY_COIN_CAP - coinsEarnedToday);
-  
-  await db.update(players)
-    .set({
-      coins: player.coins + coinsToAward,
-      coinsEarnedToday: coinsEarnedToday + coinsToAward,
-      lastCoinReset: isNewDay ? now : player.lastCoinReset,
-    })
-    .where(eq(players.discordId, discordId));
-  
-  return coinsToAward;
+  // Coin rewards disabled until shop is ready
+  return 0;
 }
 
 export async function updateDailyStreak(discordId: string): Promise<{ streak: number; isNewStreak: boolean }> {
@@ -479,12 +459,12 @@ export async function recordRecentOpponent(player1Id: string, player2Id: string,
   await db.insert(recentOpponents).values({ player1Id, player2Id, gameType });
 }
 
-export async function createChallenge(challengerId: string, challengedId: string, gameType: string, channelId: string): Promise<void> {
+export async function createChallenge(challengerId: string, challengedId: string, gameType: string, channelId: string, guildId?: string): Promise<void> {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
   await db.delete(pendingChallenges).where(
     sql`${pendingChallenges.createdAt} < ${fiveMinutesAgo}`
   );
-  await db.insert(pendingChallenges).values({ challengerId, challengedId, gameType, channelId });
+  await db.insert(pendingChallenges).values({ challengerId, challengedId, gameType, channelId, guildId });
 }
 
 export async function getChallenge(challengedId: string, challengerId?: string, gameType?: string) {
