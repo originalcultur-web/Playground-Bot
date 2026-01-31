@@ -20,7 +20,9 @@ Playground offers competitive PvP and solo games with interactive button-based U
 
 ### Game Commands
 - `,connect4` / `,c4` - Queue for Connect 4 or challenge @user
+- `,c4 play` - Instantly start Connect 4 vs Play bot (unranked)
 - `,tictactoe` / `,ttt` - Queue for Tic Tac Toe or challenge @user
+- `,ttt play` - Instantly start Tic Tac Toe vs Play bot (unranked)
 - `,wordduel` / `,wd` - Queue for Word Duel or challenge @user
 - `,wordle` / `,w` - Start solo Wordle
 
