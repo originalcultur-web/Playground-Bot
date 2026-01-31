@@ -17,6 +17,8 @@ import * as ui from "./ui/gameComponents.js";
 
 const PREFIX = ",";
 const AFK_TIMEOUT = 60000;
+const BOT_PLAYER_ID = "BOT_PLAY_123456789";
+const BOT_GAMES = ["connect4", "tictactoe"];
 
 const client = new Client({
   intents: [
@@ -36,6 +38,281 @@ const gameMessages = new Map<string, string>();
 async function getPlayerName(discordId: string): Promise<string> {
   const player = await storage.getPlayer(discordId);
   return player?.displayName || player?.username || "Unknown";
+}
+
+async function ensureBotProfile(): Promise<void> {
+  const botPlayer = await storage.getPlayer(BOT_PLAYER_ID);
+  if (!botPlayer) {
+    await storage.getOrCreatePlayer(BOT_PLAYER_ID, "playground_bot", "Play");
+  }
+}
+
+function isBotGame(player1Id: string, player2Id: string): boolean {
+  return player1Id === BOT_PLAYER_ID || player2Id === BOT_PLAYER_ID;
+}
+
+function getBotConnect4Move(state: any): number {
+  const board = state.board;
+  const botPlayer = state.player2Id === BOT_PLAYER_ID ? 2 : 1;
+  const humanPlayer = botPlayer === 1 ? 2 : 1;
+  
+  const canWin = (col: number, player: number): boolean => {
+    for (let row = 5; row >= 0; row--) {
+      if (board[row][col] === 0) {
+        const testBoard = board.map((r: number[]) => [...r]);
+        testBoard[row][col] = player;
+        return checkConnect4Win(testBoard, row, col, player);
+      }
+    }
+    return false;
+  };
+  
+  const getValidCols = (): number[] => {
+    const cols: number[] = [];
+    for (let c = 0; c < 7; c++) {
+      if (board[0][c] === 0) cols.push(c);
+    }
+    return cols;
+  };
+  
+  const validCols = getValidCols();
+  if (validCols.length === 0) return 3;
+  
+  for (const col of validCols) {
+    if (canWin(col, botPlayer)) return col;
+  }
+  
+  for (const col of validCols) {
+    if (canWin(col, humanPlayer)) return col;
+  }
+  
+  const centerPriority = [3, 2, 4, 1, 5, 0, 6];
+  for (const col of centerPriority) {
+    if (validCols.includes(col)) return col;
+  }
+  
+  return validCols[Math.floor(Math.random() * validCols.length)];
+}
+
+function checkConnect4Win(board: number[][], row: number, col: number, player: number): boolean {
+  const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+  for (const [dr, dc] of directions) {
+    let count = 1;
+    for (let i = 1; i <= 3; i++) {
+      const r = row + dr * i, c = col + dc * i;
+      if (r >= 0 && r < 6 && c >= 0 && c < 7 && board[r][c] === player) count++;
+      else break;
+    }
+    for (let i = 1; i <= 3; i++) {
+      const r = row - dr * i, c = col - dc * i;
+      if (r >= 0 && r < 6 && c >= 0 && c < 7 && board[r][c] === player) count++;
+      else break;
+    }
+    if (count >= 4) return true;
+  }
+  return false;
+}
+
+function getBotTicTacToeMove(state: any): number {
+  const board = state.board;
+  const botPlayer = state.player2Id === BOT_PLAYER_ID ? 2 : 1;
+  const humanPlayer = botPlayer === 1 ? 2 : 1;
+  
+  const getEmpty = (): number[] => {
+    const empty: number[] = [];
+    for (let i = 0; i < 9; i++) {
+      if (board[i] === 0) empty.push(i);
+    }
+    return empty;
+  };
+  
+  const canWinAt = (pos: number, player: number): boolean => {
+    const testBoard = [...board];
+    testBoard[pos] = player;
+    const wins = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]];
+    for (const [a, b, c] of wins) {
+      if (testBoard[a] === player && testBoard[b] === player && testBoard[c] === player) return true;
+    }
+    return false;
+  };
+  
+  const empty = getEmpty();
+  if (empty.length === 0) return 4;
+  
+  for (const pos of empty) {
+    if (canWinAt(pos, botPlayer)) return pos;
+  }
+  
+  for (const pos of empty) {
+    if (canWinAt(pos, humanPlayer)) return pos;
+  }
+  
+  if (empty.includes(4)) return 4;
+  
+  const corners = [0, 2, 6, 8].filter(p => empty.includes(p));
+  if (corners.length > 0) return corners[Math.floor(Math.random() * corners.length)];
+  
+  return empty[Math.floor(Math.random() * empty.length)];
+}
+
+async function makeBotMove(game: any, channel: TextChannel): Promise<void> {
+  const freshGame = await storage.getActiveGameById(game.id);
+  if (!freshGame) return;
+  
+  const freshState = freshGame.state as any;
+  const freshGameType = freshGame.gameType;
+  
+  const currentPlayerId = freshGameType === "connect4" 
+    ? connect4.getCurrentPlayerId(freshState) 
+    : tictactoe.getCurrentPlayerId(freshState);
+  
+  if (currentPlayerId !== BOT_PLAYER_ID) return;
+  
+  await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1500));
+  
+  const latestGame = await storage.getActiveGameById(game.id);
+  if (!latestGame) return;
+  
+  const latestState = latestGame.state as any;
+  const latestGameType = latestGame.gameType;
+  
+  const latestCurrentPlayer = latestGameType === "connect4" 
+    ? connect4.getCurrentPlayerId(latestState) 
+    : tictactoe.getCurrentPlayerId(latestState);
+  
+  if (latestCurrentPlayer !== BOT_PLAYER_ID) return;
+  
+  if (latestGameType === "connect4") {
+    const col = getBotConnect4Move(latestState);
+    const dropResult = connect4.dropPiece(latestState, col);
+    
+    if (dropResult.success) {
+      const player1Name = await getPlayerName(latestState.player1Id);
+      const player2Name = await getPlayerName(latestState.player2Id);
+      const display = ui.createConnect4Display(latestState);
+      
+      if (connect4.checkWin(latestState.board, latestState.currentPlayer)) {
+        const winnerId = connect4.getCurrentPlayerId(latestState);
+        const loserId = winnerId === latestState.player1Id ? latestState.player2Id : latestState.player1Id;
+        const winnerName = await getPlayerName(winnerId);
+        
+        const humanId = latestState.player1Id === BOT_PLAYER_ID ? latestState.player2Id : latestState.player1Id;
+        if (winnerId === humanId) {
+          await storage.recordGameResult(humanId, "connect4", "win");
+        } else {
+          await storage.recordGameResult(humanId, "connect4", "loss");
+        }
+        await storage.recordGameResult(BOT_PLAYER_ID, "connect4", winnerId === BOT_PLAYER_ID ? "win" : "loss");
+        
+        clearGameTimer(latestGame.id);
+        await storage.endGame(latestGame.id);
+        const buttons = ui.createConnect4Board(latestState, latestGame.id, true);
+        const content = `**CONNECT 4** 🤖\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins!\n\n*Unranked game vs Play*`;
+        await syncGameMessages(latestGame, content, buttons);
+      } else if (connect4.isBoardFull(latestState.board)) {
+        clearGameTimer(latestGame.id);
+        await storage.endGame(latestGame.id);
+        const buttons = ui.createConnect4Board(latestState, latestGame.id, true);
+        const content = `**CONNECT 4** 🤖\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\nIt's a draw!\n\n*Unranked game vs Play*`;
+        await syncGameMessages(latestGame, content, buttons);
+      } else {
+        connect4.switchTurn(latestState);
+        await storage.updateGameState(latestGame.id, latestState, connect4.getCurrentPlayerId(latestState));
+        const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(latestState));
+        const buttons = ui.createConnect4Board(latestState, latestGame.id);
+        const content = `**CONNECT 4** 🤖\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn (type 1-7 or click)\n\n*Unranked game vs Play*`;
+        await syncGameMessages(latestGame, content, buttons);
+        resetGameTimer(latestGame.id, channel);
+      }
+    }
+  } else if (latestGameType === "tictactoe") {
+    const pos = getBotTicTacToeMove(latestState);
+    const moveValid = tictactoe.makeMove(latestState, pos);
+    
+    if (moveValid) {
+      const player1Name = await getPlayerName(latestState.player1Id);
+      const player2Name = await getPlayerName(latestState.player2Id);
+      const display = ui.createTicTacToeDisplay(latestState);
+      const scoreText = latestState.maxRounds > 1 ? `\nScore: ${latestState.roundWins[0]} - ${latestState.roundWins[1]}` : "";
+      
+      if (tictactoe.checkWin(latestState.board, latestState.currentPlayer)) {
+        tictactoe.recordRoundWin(latestState, latestState.currentPlayer);
+        const matchResult = tictactoe.isMatchOver(latestState);
+        
+        if (matchResult.over && matchResult.winner) {
+          const winnerId = matchResult.winner === 1 ? latestState.player1Id : latestState.player2Id;
+          const loserId = winnerId === latestState.player1Id ? latestState.player2Id : latestState.player1Id;
+          const winnerName = await getPlayerName(winnerId);
+          
+          const humanId = latestState.player1Id === BOT_PLAYER_ID ? latestState.player2Id : latestState.player1Id;
+          if (winnerId === humanId) {
+            await storage.recordGameResult(humanId, "tictactoe", "win");
+          } else {
+            await storage.recordGameResult(humanId, "tictactoe", "loss");
+          }
+          await storage.recordGameResult(BOT_PLAYER_ID, "tictactoe", winnerId === BOT_PLAYER_ID ? "win" : "loss");
+          
+          clearGameTimer(latestGame.id);
+          await storage.endGame(latestGame.id);
+          const buttons = ui.createTicTacToeBoard(latestState, latestGame.id, true);
+          const finalScore = `\nFinal Score: ${latestState.roundWins[0]} - ${latestState.roundWins[1]}`;
+          const content = `**TIC TAC TOE** 🤖\n\n${player1Name} vs ${player2Name}${finalScore}\n\n${display}\n\n🎉 **${winnerName}** wins the match!\n\n*Unranked game vs Play*`;
+          await syncGameMessages(latestGame, content, buttons);
+        } else {
+          tictactoe.resetBoard(latestState);
+          await storage.updateGameState(latestGame.id, latestState, tictactoe.getCurrentPlayerId(latestState));
+          
+          const newDisplay = ui.createTicTacToeDisplay(latestState);
+          const nextPlayerId = tictactoe.getCurrentPlayerId(latestState);
+          const nextPlayerName = await getPlayerName(nextPlayerId);
+          const buttons = ui.createTicTacToeBoard(latestState, latestGame.id);
+          const roundScore = `\nRound ${latestState.currentRound}/${latestState.maxRounds} | Score: ${latestState.roundWins[0]} - ${latestState.roundWins[1]}`;
+          const content = `**TIC TAC TOE** 🤖\n\n${player1Name} vs ${player2Name}${roundScore}\n\n${newDisplay}\n\nIt's **${nextPlayerName}**'s turn\n\n*Unranked game vs Play*`;
+          await syncGameMessages(latestGame, content, buttons);
+          
+          if (nextPlayerId === BOT_PLAYER_ID) {
+            setTimeout(() => makeBotMove(latestGame, channel), 1500);
+          } else {
+            resetGameTimer(latestGame.id, channel);
+          }
+        }
+      } else if (tictactoe.isBoardFull(latestState.board)) {
+        if (latestState.currentRound >= latestState.maxRounds) {
+          clearGameTimer(latestGame.id);
+          await storage.endGame(latestGame.id);
+          const buttons = ui.createTicTacToeBoard(latestState, latestGame.id, true);
+          const finalScore = `\nFinal Score: ${latestState.roundWins[0]} - ${latestState.roundWins[1]}`;
+          const content = `**TIC TAC TOE** 🤖\n\n${player1Name} vs ${player2Name}${finalScore}\n\n${display}\n\nMatch ended in a draw!\n\n*Unranked game vs Play*`;
+          await syncGameMessages(latestGame, content, buttons);
+        } else {
+          tictactoe.resetBoard(latestState);
+          await storage.updateGameState(latestGame.id, latestState, tictactoe.getCurrentPlayerId(latestState));
+          
+          const newDisplay = ui.createTicTacToeDisplay(latestState);
+          const nextPlayerId = tictactoe.getCurrentPlayerId(latestState);
+          const nextPlayerName = await getPlayerName(nextPlayerId);
+          const buttons = ui.createTicTacToeBoard(latestState, latestGame.id);
+          const roundScore = `\nRound ${latestState.currentRound}/${latestState.maxRounds} | Score: ${latestState.roundWins[0]} - ${latestState.roundWins[1]}`;
+          const content = `**TIC TAC TOE** 🤖\n\n${player1Name} vs ${player2Name}${roundScore}\n\n${newDisplay}\n\nIt's **${nextPlayerName}**'s turn\n\n*Unranked game vs Play*`;
+          await syncGameMessages(latestGame, content, buttons);
+          
+          if (nextPlayerId === BOT_PLAYER_ID) {
+            setTimeout(() => makeBotMove(latestGame, channel), 1500);
+          } else {
+            resetGameTimer(latestGame.id, channel);
+          }
+        }
+      } else {
+        tictactoe.switchTurn(latestState);
+        await storage.updateGameState(latestGame.id, latestState, tictactoe.getCurrentPlayerId(latestState));
+        const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(latestState));
+        const buttons = ui.createTicTacToeBoard(latestState, latestGame.id);
+        const content = `**TIC TAC TOE** 🤖\n\n${player1Name} vs ${player2Name}${scoreText}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn\n\n*Unranked game vs Play*`;
+        await syncGameMessages(latestGame, content, buttons);
+        resetGameTimer(latestGame.id, channel);
+      }
+    }
+  }
 }
 
 async function sendToGameChannels(game: any, messageOptions: any) {
@@ -144,16 +421,20 @@ async function handleProfile(message: Message, args: string[]) {
   }
   
   let staffBadge = "";
-  const staffRole = await storage.getStaffRole(targetId);
-  if (staffRole) {
-    const emojis = await storage.loadEmojis();
-    const roleNames: Record<string, string> = {
-      owner: "Owner",
-      admin: "Admin",
-      mod: "Moderator",
-      support: "Support"
-    };
-    staffBadge = ` ${emojis[staffRole]} ${roleNames[staffRole]}`;
+  if (targetId === BOT_PLAYER_ID) {
+    staffBadge = " 🤖 Bot";
+  } else {
+    const staffRole = await storage.getStaffRole(targetId);
+    if (staffRole) {
+      const emojis = await storage.loadEmojis();
+      const roleNames: Record<string, string> = {
+        owner: "Owner",
+        admin: "Admin",
+        mod: "Moderator",
+        support: "Support"
+      };
+      staffBadge = ` ${emojis[staffRole]} ${roleNames[staffRole]}`;
+    }
   }
   
   let profile = `**${player.displayName || player.username}**${staffBadge}\n`;
@@ -161,12 +442,12 @@ async function handleProfile(message: Message, args: string[]) {
   
   profile += `**OVERALL**\n`;
   profile += `wins: ${player.totalWins}  losses: ${player.totalLosses}\n`;
-  if (player.dailyStreak && player.dailyStreak > 0) {
+  if (targetId !== BOT_PLAYER_ID && player.dailyStreak && player.dailyStreak > 0) {
     profile += `streak: ${player.dailyStreak} day${player.dailyStreak > 1 ? 's' : ''}\n`;
   }
   profile += `\n`;
   
-  const pvpGames = ["connect4", "wordduel", "tictactoe"];
+  const pvpGames = targetId === BOT_PLAYER_ID ? ["connect4", "tictactoe"] : ["connect4", "wordduel", "tictactoe"];
   const gameLabels: Record<string, string> = {
     tictactoe: "Tic Tac Toe",
     connect4: "Connect 4",
@@ -178,7 +459,11 @@ async function handleProfile(message: Message, args: string[]) {
   for (const game of pvpGames) {
     const stats = await storage.getOrCreateGameStats(targetId, game);
     if (stats.wins > 0 || stats.losses > 0) {
-      pvpStats.push(`${gameLabels[game]}: ${stats.wins}W/${stats.losses}L · ${stats.eloRating} ⭐`);
+      if (targetId === BOT_PLAYER_ID) {
+        pvpStats.push(`${gameLabels[game]}: ${stats.wins}W/${stats.losses}L`);
+      } else {
+        pvpStats.push(`${gameLabels[game]}: ${stats.wins}W/${stats.losses}L · ${stats.eloRating} ⭐`);
+      }
     }
   }
   
@@ -187,13 +472,15 @@ async function handleProfile(message: Message, args: string[]) {
     profile += pvpStats.join('\n') + '\n\n';
   }
   
-  const matches = await storage.getMatchHistory(targetId, 5);
-  if (matches.length > 0) {
-    profile += `**RECENT MATCHES**\n`;
-    for (const match of matches) {
-      const resultIcon = match.result === "win" ? "✅" : match.result === "draw" ? "🤝" : "❌";
-      const eloText = match.eloChange > 0 ? `+${match.eloChange} ⭐` : `${match.eloChange} ⭐`;
-      profile += `${resultIcon} ${match.opponentName} (${gameLabels[match.gameType] || match.gameType}) ${eloText}\n`;
+  if (targetId !== BOT_PLAYER_ID) {
+    const matches = await storage.getMatchHistory(targetId, 5);
+    if (matches.length > 0) {
+      profile += `**RECENT MATCHES**\n`;
+      for (const match of matches) {
+        const resultIcon = match.result === "win" ? "✅" : match.result === "draw" ? "🤝" : "❌";
+        const eloText = match.eloChange > 0 ? `+${match.eloChange} ⭐` : `${match.eloChange} ⭐`;
+        profile += `${resultIcon} ${match.opponentName} (${gameLabels[match.gameType] || match.gameType}) ${eloText}\n`;
+      }
     }
   }
   
@@ -679,7 +966,7 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
   } else if (gameType === "connect4") {
     buttons = ui.createConnect4Board(state, game.id);
     const display = ui.createConnect4Display(state);
-    content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${player1Name}**'s turn (type 1-7 or click)\n`;
+    content = `**CONNECT 4**\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\nIt's **${player1Name}**'s turn (type 1-7 or click)\n`;
   } else if (gameType === "wordduel") {
     const scrambled = state.scrambledWords[0].toUpperCase();
     content = `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**\nType your answer!`;
@@ -706,6 +993,49 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
   await storage.updateGameMessageIds(game.id, player1Message.id, player2MessageId);
   
   startGameTimer(game.id, player1Channel);
+}
+
+async function startBotGame(channel: TextChannel, gameType: string, playerId: string, playerInfo: {username: string, displayName?: string}) {
+  await storage.getOrCreatePlayer(playerId, playerInfo.username, playerInfo.displayName);
+  await ensureBotProfile();
+  
+  let state: any;
+  switch (gameType) {
+    case "connect4":
+      state = connect4.createGameState(playerId, BOT_PLAYER_ID);
+      break;
+    case "tictactoe":
+      state = tictactoe.createGameState(playerId, BOT_PLAYER_ID);
+      break;
+    default:
+      return;
+  }
+  
+  const game = await storage.createActiveGame(gameType, playerId, channel.id, state, BOT_PLAYER_ID);
+  
+  const playerName = await getPlayerName(playerId);
+  const botName = "Play";
+  
+  let content = "";
+  let buttons: any[] = [];
+  
+  if (gameType === "tictactoe") {
+    buttons = ui.createTicTacToeBoard(state, game.id);
+    const scoreText = state.maxRounds > 1 ? `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
+    content = `**TIC TAC TOE** 🤖\n\n${playerName} vs ${botName}${scoreText}\n\nIt's **${playerName}**'s turn\n\n*Unranked game vs Play*`;
+  } else if (gameType === "connect4") {
+    buttons = ui.createConnect4Board(state, game.id);
+    const display = ui.createConnect4Display(state);
+    content = `**CONNECT 4** 🤖\n\n🔴 ${playerName} vs 🟡 ${botName}\n\n${display}\n\nIt's **${playerName}**'s turn (type 1-7 or click)\n\n*Unranked game vs Play*`;
+  }
+  
+  const messageOptions = { content, components: buttons };
+  const gameMessage = await channel.send(messageOptions);
+  gameMessages.set(game.id, gameMessage.id);
+  
+  await storage.updateGameMessageIds(game.id, gameMessage.id);
+  
+  startGameTimer(game.id, channel);
 }
 
 async function handleGameCommand(message: Message, gameType: string) {
@@ -786,6 +1116,18 @@ async function handleGameCommand(message: Message, gameType: string) {
       const matchPlayer = await storage.getPlayer(match.discordId);
       const player2Info = matchPlayer ? { username: matchPlayer.username, displayName: matchPlayer.displayName || undefined } : undefined;
       await startPvPGame(channel, gameType, playerId, match.discordId, player1Info, player2Info, match.channelId);
+    } else if (attempts >= 9 && BOT_GAMES.includes(gameType)) {
+      await storage.removeFromQueue(playerId);
+      matchmakingTimers.delete(playerId);
+      try { await searchingMsg.delete(); } catch (e) {}
+      
+      await ensureBotProfile();
+      const channel = message.channel as TextChannel;
+      await channel.send(`No human opponent found. Starting an unranked game vs **Play** 🤖`);
+      
+      const player1Info = { username: message.author.username, displayName: message.author.displayName };
+      const player2Info = { username: "playground_bot", displayName: "Play" };
+      await startBotGame(channel, gameType, playerId, player1Info);
     } else if (attempts < 12) {
       matchmakingTimers.set(playerId, setTimeout(findOpponent, 5000));
     } else {
@@ -958,6 +1300,10 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const player1Name = await getPlayerName(state.player1Id);
     const player2Name = await getPlayerName(state.player2Id);
     
+    const isAgainstBot = isBotGame(state.player1Id, state.player2Id);
+    const botIndicator = isAgainstBot ? " 🤖" : "";
+    const unrankedNote = isAgainstBot ? "\n\n*Unranked game vs Play*" : "";
+    
     if (tictactoe.checkWin(state.board, state.currentPlayer)) {
       tictactoe.recordRoundWin(state, state.currentPlayer);
       
@@ -971,10 +1317,21 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         if (matchResult.winner) {
           const winnerName = await getPlayerName(winnerId);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
-          eloText = eloAffected ? ` (+${winnerChange})` : "";
-          noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
-          clearLeaderboardCache("tictactoe");
+          
+          if (isAgainstBot) {
+            const humanId = state.player1Id === BOT_PLAYER_ID ? state.player2Id : state.player1Id;
+            if (winnerId === humanId) {
+              await storage.recordGameResult(humanId, "tictactoe", "win");
+            } else {
+              await storage.recordGameResult(humanId, "tictactoe", "loss");
+            }
+            await storage.recordGameResult(BOT_PLAYER_ID, "tictactoe", winnerId === BOT_PLAYER_ID ? "win" : "loss");
+          } else {
+            const result = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
+            eloText = result.eloAffected ? ` (+${result.winnerChange})` : "";
+            noEloNote = !result.eloAffected ? `\n\n*No rating change - you've played ${result.dailyGamesCount} games together today (max 3 for rating)*` : "";
+            clearLeaderboardCache("tictactoe");
+          }
         }
         
         clearGameTimer(game.id);
@@ -982,10 +1339,12 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         
         const winnerName = await getPlayerName(winnerId);
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
-        const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
-        buttons.push(rematchBtn);
+        if (!isAgainstBot) {
+          const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
+          buttons.push(rematchBtn);
+        }
         const scoreText = state.maxRounds > 1 ? `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
-        const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🎉 **${winnerName}** wins the match!${eloText}${noEloNote}`;
+        const content = `**TIC TAC TOE**${botIndicator}\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🎉 **${winnerName}** wins the match!${eloText}${noEloNote}${unrankedNote}`;
         
         await interaction.deferUpdate();
         await syncGameMessages(game, content, buttons);
@@ -995,14 +1354,23 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       tictactoe.resetBoard(state);
       await storage.updateGameState(game.id, state);
       
-      const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
+      const nextPlayerId = tictactoe.getCurrentPlayerId(state);
+      const nextPlayerName = await getPlayerName(nextPlayerId);
       const buttons = ui.createTicTacToeBoard(state, game.id);
       const scoreText = `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
-      const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`;
+      const content = `**TIC TAC TOE**${botIndicator}\n\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn${unrankedNote}`;
       
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
-      resetGameTimer(game.id, interaction.channel as TextChannel);
+      
+      if (nextPlayerId === BOT_PLAYER_ID) {
+        const updatedGame = await storage.getActiveGameById(game.id);
+        if (updatedGame) {
+          setTimeout(() => makeBotMove(updatedGame, interaction.channel as TextChannel), 1500);
+        }
+      } else {
+        resetGameTimer(game.id, interaction.channel as TextChannel);
+      }
       return;
     }
     
@@ -1012,10 +1380,12 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         await storage.endGame(game.id);
         
         const buttons = ui.createTicTacToeBoard(state, game.id, true);
-        const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
-        buttons.push(rematchBtn);
+        if (!isAgainstBot) {
+          const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
+          buttons.push(rematchBtn);
+        }
         const scoreText = `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
-        const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\nMatch ended in a draw!`;
+        const content = `**TIC TAC TOE**${botIndicator}\n\n${player1Name} vs ${player2Name}${scoreText}\n\nMatch ended in a draw!${unrankedNote}`;
         
         await interaction.deferUpdate();
         await syncGameMessages(game, content, buttons);
@@ -1025,28 +1395,46 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       tictactoe.resetBoard(state);
       await storage.updateGameState(game.id, state);
       
-      const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
+      const nextPlayerId = tictactoe.getCurrentPlayerId(state);
+      const nextPlayerName = await getPlayerName(nextPlayerId);
       const buttons = ui.createTicTacToeBoard(state, game.id);
       const scoreText = `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}`;
-      const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`;
+      const content = `**TIC TAC TOE**${botIndicator}\n\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn${unrankedNote}`;
       
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
-      resetGameTimer(game.id, interaction.channel as TextChannel);
+      
+      if (nextPlayerId === BOT_PLAYER_ID) {
+        const updatedGame = await storage.getActiveGameById(game.id);
+        if (updatedGame) {
+          setTimeout(() => makeBotMove(updatedGame, interaction.channel as TextChannel), 1500);
+        }
+      } else {
+        resetGameTimer(game.id, interaction.channel as TextChannel);
+      }
       return;
     }
     
     tictactoe.switchTurn(state);
     await storage.updateGameState(game.id, state, tictactoe.getCurrentPlayerId(state));
     
-    const nextPlayerName = await getPlayerName(tictactoe.getCurrentPlayerId(state));
+    const nextPlayerId = tictactoe.getCurrentPlayerId(state);
+    const nextPlayerName = await getPlayerName(nextPlayerId);
     const buttons = ui.createTicTacToeBoard(state, game.id);
     const scoreText = state.maxRounds > 1 ? `\nRound ${state.currentRound}/${state.maxRounds} | Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
-    const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn`;
+    const content = `**TIC TAC TOE**${botIndicator}\n\n${player1Name} vs ${player2Name}${scoreText}\n\nIt's **${nextPlayerName}**'s turn${unrankedNote}`;
     
     await interaction.deferUpdate();
     await syncGameMessages(game, content, buttons);
-    resetGameTimer(game.id, interaction.channel as TextChannel);
+    
+    if (nextPlayerId === BOT_PLAYER_ID) {
+      const updatedGame = await storage.getActiveGameById(game.id);
+      if (updatedGame) {
+        setTimeout(() => makeBotMove(updatedGame, interaction.channel as TextChannel), 1500);
+      }
+    } else {
+      resetGameTimer(game.id, interaction.channel as TextChannel);
+    }
   }
   
   else if (customId.startsWith("c4_")) {
@@ -1078,24 +1466,44 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const player2Name = await getPlayerName(state.player2Id);
     const display = ui.createConnect4Display(state);
     
+    const isAgainstBot = isBotGame(state.player1Id, state.player2Id);
+    const botIndicator = isAgainstBot ? " 🤖" : "";
+    const unrankedNote = isAgainstBot ? "\n\n*Unranked game vs Play*" : "";
+    
     if (connect4.checkWin(state.board, state.currentPlayer)) {
       const winnerId = connect4.getCurrentPlayerId(state);
       const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
       
       const winnerName = await getPlayerName(winnerId);
       const loserName = await getPlayerName(loserId);
-      const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
-      clearLeaderboardCache("connect4");
+      
+      let eloText = "";
+      let noEloNote = "";
+      
+      if (isAgainstBot) {
+        const humanId = state.player1Id === BOT_PLAYER_ID ? state.player2Id : state.player1Id;
+        if (winnerId === humanId) {
+          await storage.recordGameResult(humanId, "connect4", "win");
+        } else {
+          await storage.recordGameResult(humanId, "connect4", "loss");
+        }
+        await storage.recordGameResult(BOT_PLAYER_ID, "connect4", winnerId === BOT_PLAYER_ID ? "win" : "loss");
+      } else {
+        const result = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
+        eloText = result.eloAffected ? ` (+${result.winnerChange})` : "";
+        noEloNote = !result.eloAffected ? `\n\n*No rating change - you've played ${result.dailyGamesCount} games together today (max 3 for rating)*` : "";
+        clearLeaderboardCache("connect4");
+      }
       
       clearGameTimer(game.id);
       await storage.endGame(game.id);
       
       const buttons = ui.createConnect4Board(state, game.id, true);
-      const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
-      buttons.push(rematchBtn);
-      const eloText = eloAffected ? ` (+${winnerChange})` : "";
-      const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
-      const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}`;
+      if (!isAgainstBot) {
+        const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
+        buttons.push(rematchBtn);
+      }
+      const content = `**CONNECT 4**${botIndicator}\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}${unrankedNote}`;
       
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
@@ -1107,9 +1515,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.endGame(game.id);
       
       const buttons = ui.createConnect4Board(state, game.id, true);
-      const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
-      buttons.push(rematchBtn);
-      const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's a draw!`;
+      if (!isAgainstBot) {
+        const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
+        buttons.push(rematchBtn);
+      }
+      const content = `**CONNECT 4**${botIndicator}\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\nIt's a draw!${unrankedNote}`;
       
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
@@ -1119,13 +1529,22 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     connect4.switchTurn(state);
     await storage.updateGameState(game.id, state, connect4.getCurrentPlayerId(state));
     
-    const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(state));
+    const nextPlayerId = connect4.getCurrentPlayerId(state);
+    const nextPlayerName = await getPlayerName(nextPlayerId);
     const buttons = ui.createConnect4Board(state, game.id);
-    const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn (type 1-7 or click)`;
+    const content = `**CONNECT 4**${botIndicator}\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn (type 1-7 or click)${unrankedNote}`;
     
     await interaction.deferUpdate();
     await syncGameMessages(game, content, buttons);
-    resetGameTimer(game.id, interaction.channel as TextChannel);
+    
+    if (nextPlayerId === BOT_PLAYER_ID) {
+      const updatedGame = await storage.getActiveGameById(game.id);
+      if (updatedGame) {
+        setTimeout(() => makeBotMove(updatedGame, interaction.channel as TextChannel), 1500);
+      }
+    } else {
+      resetGameTimer(game.id, interaction.channel as TextChannel);
+    }
   }
   
   else if (customId.startsWith("quit_")) {
@@ -1209,7 +1628,8 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       return;
     }
     
-    await storage.createChallenge(challengerId, opponentId, gameType, channelId);
+    const guildId = interaction.guildId || undefined;
+    await storage.createChallenge(challengerId, opponentId, gameType, channelId, guildId);
     const challengerName = await getPlayerName(challengerId);
     
     const gameNames: Record<string, string> = {
@@ -1315,24 +1735,44 @@ async function handleTextGameInput(message: Message) {
       const player2Name = await getPlayerName(state.player2Id);
       const display = ui.createConnect4Display(state);
       
+      const isAgainstBot = isBotGame(state.player1Id, state.player2Id);
+      const botIndicator = isAgainstBot ? " 🤖" : "";
+      const unrankedNote = isAgainstBot ? "\n\n*Unranked game vs Play*" : "";
+      
       if (connect4.checkWin(state.board, state.currentPlayer)) {
         const winnerId = connect4.getCurrentPlayerId(state);
         const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
         
         const winnerName = await getPlayerName(winnerId);
         const loserName = await getPlayerName(loserId);
-        const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
-        clearLeaderboardCache("connect4");
+        
+        let eloText = "";
+        let noEloNote = "";
+        
+        if (isAgainstBot) {
+          const humanId = state.player1Id === BOT_PLAYER_ID ? state.player2Id : state.player1Id;
+          if (winnerId === humanId) {
+            await storage.recordGameResult(humanId, "connect4", "win");
+          } else {
+            await storage.recordGameResult(humanId, "connect4", "loss");
+          }
+          await storage.recordGameResult(BOT_PLAYER_ID, "connect4", winnerId === BOT_PLAYER_ID ? "win" : "loss");
+        } else {
+          const result = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
+          eloText = result.eloAffected ? ` (+${result.winnerChange})` : "";
+          noEloNote = !result.eloAffected ? `\n\n*No rating change - you've played ${result.dailyGamesCount} games together today (max 3 for rating)*` : "";
+          clearLeaderboardCache("connect4");
+        }
         
         clearGameTimer(game.id);
         await storage.endGame(game.id);
         
         const buttons = ui.createConnect4Board(state, game.id, true);
-        const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
-        buttons.push(rematchBtn);
-        const eloText = eloAffected ? ` (+${winnerChange})` : "";
-        const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
-        const messageContent = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}`;
+        if (!isAgainstBot) {
+          const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
+          buttons.push(rematchBtn);
+        }
+        const messageContent = `**CONNECT 4**${botIndicator}\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}${unrankedNote}`;
         
         await syncGameMessages(game, messageContent, buttons);
         return;
@@ -1343,9 +1783,11 @@ async function handleTextGameInput(message: Message) {
         await storage.endGame(game.id);
         
         const buttons = ui.createConnect4Board(state, game.id, true);
-        const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
-        buttons.push(rematchBtn);
-        const messageContent = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's a draw!`;
+        if (!isAgainstBot) {
+          const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
+          buttons.push(rematchBtn);
+        }
+        const messageContent = `**CONNECT 4**${botIndicator}\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\nIt's a draw!${unrankedNote}`;
         
         await syncGameMessages(game, messageContent, buttons);
         return;
@@ -1354,12 +1796,21 @@ async function handleTextGameInput(message: Message) {
       connect4.switchTurn(state);
       await storage.updateGameState(game.id, state, connect4.getCurrentPlayerId(state));
       
-      const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(state));
+      const nextPlayerId = connect4.getCurrentPlayerId(state);
+      const nextPlayerName = await getPlayerName(nextPlayerId);
       const buttons = ui.createConnect4Board(state, game.id);
-      const messageContent = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn (type 1-7 or click)`;
+      const messageContent = `**CONNECT 4**${botIndicator}\n\n🔴 ${player1Name} vs 🟡 ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn (type 1-7 or click)${unrankedNote}`;
       
       await syncGameMessages(game, messageContent, buttons);
-      resetGameTimer(game.id, message.channel as TextChannel);
+      
+      if (nextPlayerId === BOT_PLAYER_ID) {
+        const updatedGame = await storage.getActiveGameById(game.id);
+        if (updatedGame) {
+          setTimeout(() => makeBotMove(updatedGame, message.channel as TextChannel), 1500);
+        }
+      } else {
+        resetGameTimer(game.id, message.channel as TextChannel);
+      }
     }
   }
   

@@ -167,6 +167,11 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
+- **Bot Opponent "Play"** - After 45 seconds in queue with no match, automatically starts unranked game vs Play 🤖 (Connect 4 and Tic Tac Toe)
+- **Play's Profile** - Play has its own profile with 🤖 Bot badge, tracks wins/losses but no Elo rating
+- **Bot AI** - Medium difficulty AI that wins/blocks and prefers strategic positions
+- **Rematch Fix** - Fixed rematch button so challenges can be accepted in the same server
+- **Chip Colors** - Connect 4 now shows 🔴 Player1 vs 🟡 Player2 next to names
 - **Leaderboard Ranking Overhaul** - PvP leaderboards now require 5 games to qualify, sorted by Elo with wins as tiebreaker
 - **Anti-Farming Protection** - After 3 games/day vs same opponent, games don't affect Elo (players notified)
 - **Leaderboard Shortcuts** - Use `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w` for quick access
