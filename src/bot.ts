@@ -1243,7 +1243,7 @@ async function startBotGame(channel: TextChannel, gameType: string, playerId: st
   startGameTimer(game.id, channel);
 }
 
-async function handleGameCommand(message: Message, gameType: string) {
+async function handleGameCommand(message: Message, gameType: string, args: string[] = []) {
   const playerId = message.author.id;
   
   await storage.getOrCreatePlayer(playerId, message.author.username, message.author.displayName);
@@ -1251,6 +1251,16 @@ async function handleGameCommand(message: Message, gameType: string) {
   const existingGame = await storage.getActiveGame(playerId);
   if (existingGame) {
     await message.channel.send("You're already in a game. Use `,quit` to leave.");
+    return;
+  }
+  
+  // Check if user wants to play against the bot
+  if (args.length > 0 && args[0].toLowerCase() === "play" && BOT_GAMES.includes(gameType)) {
+    await ensureBotProfile();
+    const channel = message.channel as TextChannel;
+    await channel.send(`Starting an unranked **${gameType.toUpperCase()}** game vs **Play** 🤖`);
+    const player1Info = { username: message.author.username, displayName: message.author.displayName };
+    await startBotGame(channel, gameType, playerId, player1Info);
     return;
   }
   
@@ -2341,11 +2351,11 @@ client.on(Events.MessageCreate, async (message: Message) => {
           break;
         case "connect4":
         case "c4":
-          await handleGameCommand(message, "connect4");
+          await handleGameCommand(message, "connect4", args);
           break;
         case "tictactoe":
         case "ttt":
-          await handleGameCommand(message, "tictactoe");
+          await handleGameCommand(message, "tictactoe", args);
           break;
         case "wordduel":
         case "wd":
