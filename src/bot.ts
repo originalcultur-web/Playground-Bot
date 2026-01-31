@@ -601,7 +601,10 @@ async function handleProfile(message: Message, args: string[]) {
   let targetId = message.author.id;
   let targetName = message.author.username;
   
-  if (message.mentions.users.size > 0) {
+  if (args.length > 0 && args[0].toLowerCase() === "play") {
+    targetId = BOT_PLAYER_ID;
+    targetName = "Play";
+  } else if (message.mentions.users.size > 0) {
     const mentioned = message.mentions.users.first()!;
     targetId = mentioned.id;
     targetName = mentioned.username;
