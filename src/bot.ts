@@ -1447,8 +1447,12 @@ async function handleQuit(message: Message) {
     const opponentId = game.player1Id === playerId ? game.player2Id : game.player1Id;
     const playerName = await getPlayerName(playerId);
     const opponentName = await getPlayerName(opponentId);
+    const isAgainstBot = isBotGame(game.player1Id, game.player2Id);
     
-    if (PVP_GAMES.includes(game.gameType)) {
+    if (isAgainstBot) {
+      await storage.recordGameResult(BOT_PLAYER_ID, game.gameType, "win");
+      await sendToGameChannels(game, { content: `**${playerName}** forfeited. **${opponentName}** wins!\n\n*Unranked game vs Play*` });
+    } else if (PVP_GAMES.includes(game.gameType)) {
       const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(opponentId, playerId, game.gameType, opponentName, playerName);
       clearLeaderboardCache(game.gameType);
       await storage.recordForfeit(playerId);
@@ -1759,19 +1763,24 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const opponentId = game.player1Id === userId ? game.player2Id : game.player1Id;
       const userName = await getPlayerName(userId);
       const opponentName = await getPlayerName(opponentId);
+      const isAgainstBot = isBotGame(game.player1Id, game.player2Id);
       
       let eloText = "";
       let noEloNote = "";
-      if (PVP_GAMES.includes(game.gameType)) {
+      if (isAgainstBot) {
+        await storage.recordGameResult(BOT_PLAYER_ID, game.gameType, "win");
+        noEloNote = "\n\n*Unranked game vs Play*";
+      } else if (PVP_GAMES.includes(game.gameType)) {
         const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(opponentId, userId, game.gameType, opponentName, userName);
         eloText = eloAffected ? ` (+${winnerChange})` : "";
         noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
         clearLeaderboardCache(game.gameType);
+        await storage.recordForfeit(userId);
       } else {
         await storage.recordGameResult(userId, game.gameType, "loss");
         await storage.recordGameResult(opponentId, game.gameType, "win");
+        await storage.recordForfeit(userId);
       }
-      await storage.recordForfeit(userId);
       
       await interaction.update({
         content: `**${userName}** forfeited. **${opponentName}** wins!${eloText}${noEloNote}`,
@@ -2221,10 +2230,14 @@ function startGameTimer(gameId: string, channel: TextChannel) {
       
       const timedOutName = await getPlayerName(currentPlayerId);
       const winnerName = await getPlayerName(opponentId);
+      const isAgainstBot = isBotGame(game.player1Id, game.player2Id);
       
       let eloText = "";
       let noEloNote = "";
-      if (PVP_GAMES.includes(game.gameType)) {
+      if (isAgainstBot) {
+        await storage.recordGameResult(BOT_PLAYER_ID, game.gameType, currentPlayerId === BOT_PLAYER_ID ? "loss" : "win");
+        noEloNote = "\n\n*Unranked game vs Play*";
+      } else if (PVP_GAMES.includes(game.gameType)) {
         const { winnerChange: change, eloAffected, dailyGamesCount } = await storage.recordPvPResult(opponentId, currentPlayerId, game.gameType, winnerName, timedOutName);
         eloText = eloAffected ? ` (+${change})` : "";
         noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
