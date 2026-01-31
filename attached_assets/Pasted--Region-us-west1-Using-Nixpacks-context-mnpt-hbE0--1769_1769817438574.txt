@@ -1,0 +1,80 @@
+[Region: us-west1]
+==============
+Using Nixpacks
+==============
+context: mnpt-hbE0
+╔═══════════════ Nixpacks v1.38.0 ══════════════╗
+║ setup      │ nodejs_18, npm-9_x, openssl      ║
+║───────────────────────────────────────────────║
+║ install    │ npm ci                           ║
+║───────────────────────────────────────────────║
+║ start      │ npm run db:push && npm run start ║
+╚═══════════════════════════════════════════════╝
+internal
+load build definition from Dockerfile
+0ms
+internal
+load metadata for ghcr.io/railwayapp/nixpacks:ubuntu-1745885067
+354ms
+internal
+load .dockerignore
+0ms
+stage-0
+FROM ghcr.io/railwayapp/nixpacks:ubuntu-1745885067@sha256:d45c89d80e13d7ad0fd555b5130f22a866d9dd10e861f589932303ef2314c7de
+8ms
+internal
+load build context
+0ms
+stage-0
+RUN nix-env -if .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix && nix-collect-garbage -d cached
+0ms
+stage-0
+COPY .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix cached
+0ms
+stage-0
+WORKDIR /app/ cached
+0ms
+stage-0
+COPY . /app/.
+20ms
+stage-0
+RUN npm ci
+3s
+Run `npm audit` for details.
+stage-0
+RUN printf '\nPATH=/app/node_modules/.bin:$PATH' >> /root/.profile
+167ms
+stage-0
+COPY . /app
+39ms
+auth
+sharing credentials for production-us-west2.railway-registry.com
+0ms
+importing to docker
+9s
+=== Successfully Built! ===
+Run:
+docker run -it production-us-west2.railway-registry.com/574959d7-e499-407b-8bfa-51277a9b3934:e901dec9-c9ff-408b-8b27-a2d946d82a4f
+Build time: 28.62 seconds
+ 
+====================
+Starting Healthcheck
+====================
+Path: /
+Retry window: 5m0s
+ 
+Attempt #1 failed with service unavailable. Continuing to retry for 4m49s
+Attempt #2 failed with service unavailable. Continuing to retry for 4m38s
+Attempt #3 failed with service unavailable. Continuing to retry for 4m26s
+Attempt #4 failed with service unavailable. Continuing to retry for 4m12s
+Attempt #5 failed with service unavailable. Continuing to retry for 3m54s
+Attempt #6 failed with service unavailable. Continuing to retry for 3m28s
+Attempt #7 failed with service unavailable. Continuing to retry for 2m48s
+Attempt #8 failed with service unavailable. Continuing to retry for 2m8s
+Attempt #9 failed with service unavailable. Continuing to retry for 1m28s
+Attempt #10 failed with service unavailable. Continuing to retry for 58s
+Attempt #11 failed with service unavailable. Continuing to retry for 18s
+ 
+1/1 replicas never became healthy!
+
+Healthcheck failed!
