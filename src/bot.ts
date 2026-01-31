@@ -52,46 +52,209 @@ function isBotGame(player1Id: string, player2Id: string): boolean {
 }
 
 function getBotConnect4Move(state: any): number {
-  const board = state.board;
+  const originalBoard = state.board;
   const botPlayer = state.player2Id === BOT_PLAYER_ID ? 2 : 1;
   const humanPlayer = botPlayer === 1 ? 2 : 1;
+  const MAX_DEPTH = 8;
   
-  const canWin = (col: number, player: number): boolean => {
+  const copyBoard = (b: number[][]): number[][] => b.map(r => [...r]);
+  
+  const getValidCols = (b: number[][]): number[] => {
+    const cols: number[] = [];
+    for (let c = 0; c < 7; c++) {
+      if (b[0][c] === 0) cols.push(c);
+    }
+    return cols;
+  };
+  
+  const dropPiece = (b: number[][], col: number, player: number): number => {
     for (let row = 5; row >= 0; row--) {
-      if (board[row][col] === 0) {
-        const testBoard = board.map((r: number[]) => [...r]);
-        testBoard[row][col] = player;
-        return checkConnect4Win(testBoard, row, col, player);
+      if (b[row][col] === 0) {
+        b[row][col] = player;
+        return row;
+      }
+    }
+    return -1;
+  };
+  
+  const checkWin = (b: number[][], row: number, col: number, player: number): boolean => {
+    const directions = [[0, 1], [1, 0], [1, 1], [1, -1]];
+    for (const [dr, dc] of directions) {
+      let count = 1;
+      for (let i = 1; i <= 3; i++) {
+        const r = row + dr * i, c = col + dc * i;
+        if (r >= 0 && r < 6 && c >= 0 && c < 7 && b[r][c] === player) count++;
+        else break;
+      }
+      for (let i = 1; i <= 3; i++) {
+        const r = row - dr * i, c = col - dc * i;
+        if (r >= 0 && r < 6 && c >= 0 && c < 7 && b[r][c] === player) count++;
+        else break;
+      }
+      if (count >= 4) return true;
+    }
+    return false;
+  };
+  
+  const isBoardFull = (b: number[][]): boolean => {
+    for (let c = 0; c < 7; c++) {
+      if (b[0][c] === 0) return false;
+    }
+    return true;
+  };
+  
+  const evaluateWindow = (window: number[], player: number): number => {
+    const opp = player === 1 ? 2 : 1;
+    const playerCount = window.filter(c => c === player).length;
+    const oppCount = window.filter(c => c === opp).length;
+    const emptyCount = window.filter(c => c === 0).length;
+    
+    if (playerCount === 4) return 100000;
+    if (playerCount === 3 && emptyCount === 1) return 100;
+    if (playerCount === 2 && emptyCount === 2) return 10;
+    if (oppCount === 3 && emptyCount === 1) return -80;
+    if (oppCount === 2 && emptyCount === 2) return -5;
+    return 0;
+  };
+  
+  const evaluateBoard = (b: number[][], player: number): number => {
+    let score = 0;
+    
+    for (let r = 0; r < 6; r++) {
+      score += b[r][3] === player ? 3 : 0;
+    }
+    
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 4; c++) {
+        const window = [b[r][c], b[r][c+1], b[r][c+2], b[r][c+3]];
+        score += evaluateWindow(window, player);
+      }
+    }
+    
+    for (let c = 0; c < 7; c++) {
+      for (let r = 0; r < 3; r++) {
+        const window = [b[r][c], b[r+1][c], b[r+2][c], b[r+3][c]];
+        score += evaluateWindow(window, player);
+      }
+    }
+    
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 4; c++) {
+        const window = [b[r][c], b[r+1][c+1], b[r+2][c+2], b[r+3][c+3]];
+        score += evaluateWindow(window, player);
+      }
+    }
+    
+    for (let r = 3; r < 6; r++) {
+      for (let c = 0; c < 4; c++) {
+        const window = [b[r][c], b[r-1][c+1], b[r-2][c+2], b[r-3][c+3]];
+        score += evaluateWindow(window, player);
+      }
+    }
+    
+    return score;
+  };
+  
+  const hasWin = (b: number[][], player: number): boolean => {
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (b[r][c] === player && b[r][c+1] === player && b[r][c+2] === player && b[r][c+3] === player) return true;
+      }
+    }
+    for (let c = 0; c < 7; c++) {
+      for (let r = 0; r < 3; r++) {
+        if (b[r][c] === player && b[r+1][c] === player && b[r+2][c] === player && b[r+3][c] === player) return true;
+      }
+    }
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (b[r][c] === player && b[r+1][c+1] === player && b[r+2][c+2] === player && b[r+3][c+3] === player) return true;
+      }
+    }
+    for (let r = 3; r < 6; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (b[r][c] === player && b[r-1][c+1] === player && b[r-2][c+2] === player && b[r-3][c+3] === player) return true;
       }
     }
     return false;
   };
   
-  const getValidCols = (): number[] => {
-    const cols: number[] = [];
-    for (let c = 0; c < 7; c++) {
-      if (board[0][c] === 0) cols.push(c);
+  const minimax = (b: number[][], depth: number, alpha: number, beta: number, isMaximizing: boolean): number => {
+    if (hasWin(b, botPlayer)) return 1000000 + depth;
+    if (hasWin(b, humanPlayer)) return -1000000 - depth;
+    
+    const validCols = getValidCols(b);
+    
+    if (isBoardFull(b) || validCols.length === 0) return 0;
+    
+    if (depth === 0) {
+      return evaluateBoard(b, botPlayer);
     }
-    return cols;
+    
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+      for (const col of [3, 2, 4, 1, 5, 0, 6].filter(c => validCols.includes(c))) {
+        const testBoard = copyBoard(b);
+        const row = dropPiece(testBoard, col, botPlayer);
+        if (row === -1) continue;
+        
+        const evalScore = minimax(testBoard, depth - 1, alpha, beta, false);
+        maxEval = Math.max(maxEval, evalScore);
+        alpha = Math.max(alpha, evalScore);
+        if (beta <= alpha) break;
+      }
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+      for (const col of [3, 2, 4, 1, 5, 0, 6].filter(c => validCols.includes(c))) {
+        const testBoard = copyBoard(b);
+        const row = dropPiece(testBoard, col, humanPlayer);
+        if (row === -1) continue;
+        
+        const evalScore = minimax(testBoard, depth - 1, alpha, beta, true);
+        minEval = Math.min(minEval, evalScore);
+        beta = Math.min(beta, evalScore);
+        if (beta <= alpha) break;
+      }
+      return minEval;
+    }
   };
   
-  const validCols = getValidCols();
+  const validCols = getValidCols(originalBoard);
   if (validCols.length === 0) return 3;
   
   for (const col of validCols) {
-    if (canWin(col, botPlayer)) return col;
+    const testBoard = copyBoard(originalBoard);
+    const row = dropPiece(testBoard, col, botPlayer);
+    if (row !== -1 && checkWin(testBoard, row, col, botPlayer)) {
+      return col;
+    }
   }
   
   for (const col of validCols) {
-    if (canWin(col, humanPlayer)) return col;
+    const testBoard = copyBoard(originalBoard);
+    const row = dropPiece(testBoard, col, humanPlayer);
+    if (row !== -1 && checkWin(testBoard, row, col, humanPlayer)) {
+      return col;
+    }
   }
   
-  const centerPriority = [3, 2, 4, 1, 5, 0, 6];
-  for (const col of centerPriority) {
-    if (validCols.includes(col)) return col;
+  let bestMove = validCols[0];
+  let bestScore = -Infinity;
+  
+  for (const col of [3, 2, 4, 1, 5, 0, 6].filter(c => validCols.includes(c))) {
+    const testBoard = copyBoard(originalBoard);
+    const row = dropPiece(testBoard, col, botPlayer);
+    if (row === -1) continue;
+    
+    const score = minimax(testBoard, MAX_DEPTH - 1, -Infinity, Infinity, false);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = col;
+    }
   }
   
-  return validCols[Math.floor(Math.random() * validCols.length)];
+  return bestMove;
 }
 
 function checkConnect4Win(board: number[][], row: number, col: number, player: number): boolean {
@@ -114,45 +277,75 @@ function checkConnect4Win(board: number[][], row: number, col: number, player: n
 }
 
 function getBotTicTacToeMove(state: any): number {
-  const board = state.board;
+  const board = [...state.board];
   const botPlayer = state.player2Id === BOT_PLAYER_ID ? 2 : 1;
   const humanPlayer = botPlayer === 1 ? 2 : 1;
   
-  const getEmpty = (): number[] => {
+  const WIN_PATTERNS = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]];
+  
+  const checkWinner = (b: number[]): number | null => {
+    for (const [a, x, c] of WIN_PATTERNS) {
+      if (b[a] !== 0 && b[a] === b[x] && b[x] === b[c]) return b[a];
+    }
+    return null;
+  };
+  
+  const isFull = (b: number[]): boolean => b.every(cell => cell !== 0);
+  
+  const getEmpty = (b: number[]): number[] => {
     const empty: number[] = [];
     for (let i = 0; i < 9; i++) {
-      if (board[i] === 0) empty.push(i);
+      if (b[i] === 0) empty.push(i);
     }
     return empty;
   };
   
-  const canWinAt = (pos: number, player: number): boolean => {
-    const testBoard = [...board];
-    testBoard[pos] = player;
-    const wins = [[0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6]];
-    for (const [a, b, c] of wins) {
-      if (testBoard[a] === player && testBoard[b] === player && testBoard[c] === player) return true;
+  const minimax = (b: number[], isMaximizing: boolean, depth: number): number => {
+    const winner = checkWinner(b);
+    if (winner === botPlayer) return 10 - depth;
+    if (winner === humanPlayer) return depth - 10;
+    if (isFull(b)) return 0;
+    
+    const empty = getEmpty(b);
+    
+    if (isMaximizing) {
+      let bestScore = -Infinity;
+      for (const pos of empty) {
+        b[pos] = botPlayer;
+        const score = minimax(b, false, depth + 1);
+        b[pos] = 0;
+        bestScore = Math.max(score, bestScore);
+      }
+      return bestScore;
+    } else {
+      let bestScore = Infinity;
+      for (const pos of empty) {
+        b[pos] = humanPlayer;
+        const score = minimax(b, true, depth + 1);
+        b[pos] = 0;
+        bestScore = Math.min(score, bestScore);
+      }
+      return bestScore;
     }
-    return false;
   };
   
-  const empty = getEmpty();
+  const empty = getEmpty(board);
   if (empty.length === 0) return 4;
   
-  for (const pos of empty) {
-    if (canWinAt(pos, botPlayer)) return pos;
-  }
+  let bestMove = empty[0];
+  let bestScore = -Infinity;
   
   for (const pos of empty) {
-    if (canWinAt(pos, humanPlayer)) return pos;
+    board[pos] = botPlayer;
+    const score = minimax(board, false, 0);
+    board[pos] = 0;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = pos;
+    }
   }
   
-  if (empty.includes(4)) return 4;
-  
-  const corners = [0, 2, 6, 8].filter(p => empty.includes(p));
-  if (corners.length > 0) return corners[Math.floor(Math.random() * corners.length)];
-  
-  return empty[Math.floor(Math.random() * empty.length)];
+  return bestMove;
 }
 
 async function makeBotMove(game: any, channel: TextChannel): Promise<void> {
