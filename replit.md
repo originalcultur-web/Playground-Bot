@@ -167,9 +167,11 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
+- **Expert Bot AI** - Bot opponent Play now uses advanced AI algorithms:
+  - **Tic Tac Toe**: Full minimax algorithm - unbeatable, plays perfectly every game
+  - **Connect 4**: Minimax with alpha-beta pruning (8 moves lookahead) - extremely difficult to beat
 - **Bot Opponent "Play"** - After 45 seconds in queue with no match, automatically starts unranked game vs Play 🤖 (Connect 4 and Tic Tac Toe)
 - **Play's Profile** - Play has its own profile with 🤖 Bot badge, tracks wins/losses but no Elo rating
-- **Bot AI** - Medium difficulty AI that wins/blocks and prefers strategic positions
 - **Rematch Fix** - Fixed rematch button so challenges can be accepted in the same server
 - **Chip Colors** - Connect 4 now shows 🔴 Player1 vs 🟡 Player2 next to names
 - **Leaderboard Ranking Overhaul** - PvP leaderboards now require 5 games to qualify, sorted by Elo with wins as tiebreaker
