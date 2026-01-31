@@ -395,12 +395,6 @@ async function makeBotMove(game: any, channel: TextChannel): Promise<void> {
         const loserId = winnerId === latestState.player1Id ? latestState.player2Id : latestState.player1Id;
         const winnerName = await getPlayerName(winnerId);
         
-        const humanId = latestState.player1Id === BOT_PLAYER_ID ? latestState.player2Id : latestState.player1Id;
-        if (winnerId === humanId) {
-          await storage.recordGameResult(humanId, "connect4", "win");
-        } else {
-          await storage.recordGameResult(humanId, "connect4", "loss");
-        }
         await storage.recordGameResult(BOT_PLAYER_ID, "connect4", winnerId === BOT_PLAYER_ID ? "win" : "loss");
         
         clearGameTimer(latestGame.id);
@@ -443,12 +437,6 @@ async function makeBotMove(game: any, channel: TextChannel): Promise<void> {
           const loserId = winnerId === latestState.player1Id ? latestState.player2Id : latestState.player1Id;
           const winnerName = await getPlayerName(winnerId);
           
-          const humanId = latestState.player1Id === BOT_PLAYER_ID ? latestState.player2Id : latestState.player1Id;
-          if (winnerId === humanId) {
-            await storage.recordGameResult(humanId, "tictactoe", "win");
-          } else {
-            await storage.recordGameResult(humanId, "tictactoe", "loss");
-          }
           await storage.recordGameResult(BOT_PLAYER_ID, "tictactoe", winnerId === BOT_PLAYER_ID ? "win" : "loss");
           
           clearGameTimer(latestGame.id);
@@ -1534,12 +1522,6 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
           const loserName = await getPlayerName(loserId);
           
           if (isAgainstBot) {
-            const humanId = state.player1Id === BOT_PLAYER_ID ? state.player2Id : state.player1Id;
-            if (winnerId === humanId) {
-              await storage.recordGameResult(humanId, "tictactoe", "win");
-            } else {
-              await storage.recordGameResult(humanId, "tictactoe", "loss");
-            }
             await storage.recordGameResult(BOT_PLAYER_ID, "tictactoe", winnerId === BOT_PLAYER_ID ? "win" : "loss");
           } else {
             const result = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
@@ -1697,12 +1679,6 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       let noEloNote = "";
       
       if (isAgainstBot) {
-        const humanId = state.player1Id === BOT_PLAYER_ID ? state.player2Id : state.player1Id;
-        if (winnerId === humanId) {
-          await storage.recordGameResult(humanId, "connect4", "win");
-        } else {
-          await storage.recordGameResult(humanId, "connect4", "loss");
-        }
         await storage.recordGameResult(BOT_PLAYER_ID, "connect4", winnerId === BOT_PLAYER_ID ? "win" : "loss");
       } else {
         const result = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
@@ -1966,12 +1942,6 @@ async function handleTextGameInput(message: Message) {
         let noEloNote = "";
         
         if (isAgainstBot) {
-          const humanId = state.player1Id === BOT_PLAYER_ID ? state.player2Id : state.player1Id;
-          if (winnerId === humanId) {
-            await storage.recordGameResult(humanId, "connect4", "win");
-          } else {
-            await storage.recordGameResult(humanId, "connect4", "loss");
-          }
           await storage.recordGameResult(BOT_PLAYER_ID, "connect4", winnerId === BOT_PLAYER_ID ? "win" : "loss");
         } else {
           const result = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
