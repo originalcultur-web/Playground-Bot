@@ -143,24 +143,7 @@ async function handleProfile(message: Message, args: string[]) {
     return;
   }
   
-  let badge = "";
-  let title = "";
-  let frame = "";
   let staffBadge = "";
-  
-  if (player.equippedBadge) {
-    const item = await storage.getShopItem(player.equippedBadge);
-    if (item) badge = item.emoji + " ";
-  }
-  if (player.equippedTitle) {
-    const item = await storage.getShopItem(player.equippedTitle);
-    if (item) title = ` [${item.name}]`;
-  }
-  if (player.equippedFrame) {
-    const item = await storage.getShopItem(player.equippedFrame);
-    if (item) frame = ` ${item.emoji}`;
-  }
-  
   const staffRole = await storage.getStaffRole(targetId);
   if (staffRole) {
     const emojis = await storage.loadEmojis();
@@ -173,21 +156,17 @@ async function handleProfile(message: Message, args: string[]) {
     staffBadge = ` ${emojis[staffRole]} ${roleNames[staffRole]}`;
   }
   
-  let profile = `${badge}**${player.displayName || player.username}**${title}${frame}${staffBadge}\n`;
-  profile += `@${player.username}\n\n`;
+  let profile = `**${player.displayName || player.username}**${staffBadge}\n`;
+  profile += `*@${player.username}*\n\n`;
   
-  profile += `**Overall Stats**\n`;
-  profile += `🏆 ${player.totalWins}  💀 ${player.totalLosses}`;
-  if (targetId === message.author.id) {
-    profile += `  💰 ${player.coins}`;
-  }
+  profile += `**OVERALL**\n`;
+  profile += `wins: ${player.totalWins}  losses: ${player.totalLosses}\n`;
   if (player.dailyStreak && player.dailyStreak > 0) {
-    profile += `  🔥 ${player.dailyStreak} day streak`;
+    profile += `streak: ${player.dailyStreak} day${player.dailyStreak > 1 ? 's' : ''}\n`;
   }
-  profile += `\n\n`;
+  profile += `\n`;
   
-  const pvpGames = ["tictactoe", "connect4", "wordduel"];
-  const soloGames = ["wordle"];
+  const pvpGames = ["connect4", "wordduel", "tictactoe"];
   const gameLabels: Record<string, string> = {
     tictactoe: "Tic Tac Toe",
     connect4: "Connect 4",
@@ -195,33 +174,26 @@ async function handleProfile(message: Message, args: string[]) {
     wordle: "Wordle"
   };
   
-  profile += `**PvP Rankings**\n`;
+  const pvpStats: string[] = [];
   for (const game of pvpGames) {
     const stats = await storage.getOrCreateGameStats(targetId, game);
     if (stats.wins > 0 || stats.losses > 0) {
-      const rankBadge = storage.getRankBadge(stats.eloRating);
-      const rankName = storage.getRankName(stats.eloRating);
-      const streakText = stats.winStreak > 0 ? ` 🔥${stats.winStreak}` : "";
-      profile += `${rankBadge} ${gameLabels[game]}: ${rankName} ⭐${stats.eloRating} (${stats.wins}W/${stats.losses}L)${streakText}\n`;
+      pvpStats.push(`${gameLabels[game]}: ${stats.wins}W/${stats.losses}L · ${stats.eloRating} ⭐`);
     }
   }
   
-  profile += `\n**Solo Games**\n`;
-  for (const game of soloGames) {
-    const stats = await storage.getOrCreateGameStats(targetId, game);
-    if (stats.wins > 0 || stats.losses > 0) {
-      const streakText = stats.bestStreak > 0 ? ` (Best: ${stats.bestStreak})` : "";
-      profile += `${gameLabels[game]}: ${stats.wins}W/${stats.losses}L${streakText}\n`;
-    }
+  if (pvpStats.length > 0) {
+    profile += `**PVP**\n`;
+    profile += pvpStats.join('\n') + '\n\n';
   }
   
   const matches = await storage.getMatchHistory(targetId, 5);
   if (matches.length > 0) {
-    profile += `\n**Recent Matches**\n`;
+    profile += `**RECENT MATCHES**\n`;
     for (const match of matches) {
       const resultIcon = match.result === "win" ? "✅" : match.result === "draw" ? "🤝" : "❌";
       const eloText = match.eloChange > 0 ? `+${match.eloChange} ⭐` : `${match.eloChange} ⭐`;
-      profile += `${resultIcon} **${match.opponentName}** (${gameLabels[match.gameType] || match.gameType}) ${eloText}\n`;
+      profile += `${resultIcon} ${match.opponentName} (${gameLabels[match.gameType] || match.gameType}) ${eloText}\n`;
     }
   }
   
@@ -241,6 +213,12 @@ function clearLeaderboardCache(game?: string) {
 async function handleLeaderboard(message: Message, args: string[]) {
   const game = args[0]?.toLowerCase();
   const validGames = ["connect4", "tictactoe", "wordduel", "wordle"];
+  const gameLabels: Record<string, string> = {
+    connect4: "CONNECT 4",
+    tictactoe: "TIC TAC TOE",
+    wordduel: "WORD DUEL",
+    wordle: "WORDLE"
+  };
   
   if (!game || !validGames.includes(game)) {
     await message.channel.send(`Usage: ,leaderboard <game>\nGames: ${validGames.join(", ")}`);
@@ -257,9 +235,8 @@ async function handleLeaderboard(message: Message, args: string[]) {
   const leaders = await storage.getLeaderboard(game);
   const playerRank = await storage.getPlayerRank(message.author.id, game);
   const playerStats = await storage.getOrCreateGameStats(message.author.id, game);
-  const isPvP = PVP_GAMES.includes(game);
   
-  let display = `**${game.toUpperCase()} LEADERBOARD**\n\n`;
+  let display = `**${gameLabels[game]} LEADERBOARD**\n\n`;
   
   if (leaders.length === 0) {
     display += "No players yet. Be the first!\n";
@@ -270,22 +247,13 @@ async function handleLeaderboard(message: Message, args: string[]) {
       const displayName = player?.displayName || "Unknown";
       const username = player?.username || "unknown";
       
-      if (isPvP) {
-        display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-        display += `\u2800  ⭐ ${stat.eloRating}  🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
-      } else {
-        display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-        display += `\u2800  🏆 ${stat.wins}  💀 ${stat.losses}  📈 ${stat.winRate.toFixed(0)}%\n`;
-      }
+      display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
+      display += `   wins: ${stat.wins}  losses: ${stat.losses}  win rate: ${stat.winRate.toFixed(0)}%\n\n`;
     }
   }
   
-  display += `\n**YOUR RANK:** #${playerRank}\n`;
-  if (isPvP) {
-    display += `\u2800  ⭐ ${playerStats.eloRating}  🏆 ${playerStats.wins}  💀 ${playerStats.losses}  📈 ${playerStats.winRate.toFixed(0)}%`;
-  } else {
-    display += `\u2800  🏆 ${playerStats.wins}  💀 ${playerStats.losses}  📈 ${playerStats.winRate.toFixed(0)}%`;
-  }
+  display += `**YOUR RANK:** ${playerRank}\n`;
+  display += `wins: ${playerStats.wins}  losses: ${playerStats.losses}  win rate: ${playerStats.winRate.toFixed(0)}%`;
   
   leaderboardCache.set(cacheKey, { data: display, timestamp: Date.now() });
   await message.channel.send(display);

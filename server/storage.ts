@@ -124,22 +124,6 @@ export async function updateDailyStreak(discordId: string): Promise<{ streak: nu
   return { streak: newStreak, isNewStreak };
 }
 
-export function getRankBadge(eloRating: number): string {
-  if (eloRating >= 1700) return "👑";
-  if (eloRating >= 1500) return "💎";
-  if (eloRating >= 1300) return "🥇";
-  if (eloRating >= 1100) return "🥈";
-  return "🥉";
-}
-
-export function getRankName(eloRating: number): string {
-  if (eloRating >= 1700) return "Champion";
-  if (eloRating >= 1500) return "Diamond";
-  if (eloRating >= 1300) return "Gold";
-  if (eloRating >= 1100) return "Silver";
-  return "Bronze";
-}
-
 export async function getOrCreateGameStats(discordId: string, game: string): Promise<GameStat> {
   const existing = await db.query.gameStats.findFirst({
     where: and(eq(gameStats.discordId, discordId), eq(gameStats.game, game)),

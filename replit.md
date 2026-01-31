@@ -85,7 +85,25 @@ Playground offers competitive PvP and solo games with interactive button-based U
 ### Leaderboard Display
 ```
 1. **PlayerName** (*@username*)
-   ⭐ 1250  🏆 42  💀 18  📈 70%
+   wins: 42  losses: 18  win rate: 70%
+```
+
+### Profile Display
+```
+**PlayerName** 👑 Owner
+*@username*
+
+OVERALL
+wins: 3  losses: 3
+streak: 1 day
+
+PVP
+Connect 4: 3W/2L · 1011 ⭐
+Word Duel: 0W/1L · 984 ⭐
+
+RECENT MATCHES
+✅ Opponent (Connect 4) +14 ⭐
+❌ Opponent (Word Duel) −16 ⭐
 ```
 
 ## Project Structure
@@ -145,6 +163,8 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
+- **Clean Profile Format** - New clean layout with OVERALL, PVP, and RECENT MATCHES sections
+- **Clean Leaderboard Format** - Simplified display with wins/losses/win rate (removed emoji icons)
 - **Cross-Server Fixes** - Word Duel now properly updates both player channels when matched across servers
 - **Direct Challenges Same-Server Only** - Direct @user challenges must be accepted in the same server
 - **Match Found Notification** - Cross-server queue matches now notify both player channels
@@ -152,19 +172,13 @@ This bot is configured as a **Reserved VM** deployment:
 - **Minesweeper Removed** - Game removed from bot
 - **Shop Disabled** - Coming soon with unique cosmetic items
 - **Daily Streak Counter** - Tracks consecutive days of play, displayed on profile
-- **Rank Badge System** - 5 visual tiers displayed on PvP rankings (Bronze/Silver/Gold/Diamond/Champion)
 - **Wordle Keyboard** - Shows used letters with grouped status format after each guess
 - **GG Button** - Sportsmanship button appears alongside rematch after PvP games
 - **Word Duel Countdown** - "3... 2... 1... GO!" animation before each round
 - **Win Emojis** - 🎉 emoji added to all win announcements
-- **Match History** - Profile now shows last 5 matches with opponent, result, and Elo change
+- **Match History** - Profile shows last 5 matches with opponent, result, and Elo change
 - **Rematch Button** - PvP games now show a rematch button after game ends
-- **Enhanced Profile** - Shows Elo ratings per game, win streaks, and equipped cosmetics
 - **Word Lists** - 5,000 unique 5-letter words for Wordle and Word Duel
 - **Wordle Key Guide** - Fixed guide to correctly show ⬛ (black) for letters not in word
-- **Elo Rating System** - PvP games now use Elo-based ranking
-- Rating changes displayed after matches (+N ⭐)
-- Leaderboard display updated with emoji icons and compact format
-- Leaderboard cache clears after games for instant updates
-- Cross-server matchmaking - players from different servers can be matched together
-- Player names show as **DisplayName** (*@username*) format
+- **Elo Rating System** - PvP games use Elo-based ranking with rating changes after matches
+- Cross-server matchmaking - players from different servers can be matched via queue
