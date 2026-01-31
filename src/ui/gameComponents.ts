@@ -84,6 +84,13 @@ export function createConnect4Board(state: any, gameId: string, disabled = false
         .setDisabled(disabled || colFull)
     );
   }
+  row2.addComponents(
+    new ButtonBuilder()
+      .setCustomId(`quit_${gameId}`)
+      .setLabel("Q")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(disabled)
+  );
   rows.push(row2);
   
   return rows;

@@ -27,13 +27,15 @@ Playground offers competitive PvP and solo games with interactive button-based U
 ### Gameplay Commands
 - `,quit` / `,q` - Forfeit current game or leave queue
 - `,accept` - Accept a challenge
-- **Tic Tac Toe & Connect 4** - Click buttons to play
+- **Connect 4** - Type 1-7 or click buttons to drop pieces, Q button to quit
+- **Tic Tac Toe** - Click buttons to play
 - **Wordle & Word Duel** - Type your answers
 
 ### Profile & Stats
 - `,profile` / `,p` - View your profile
 - `,profile @user` - View someone's profile
 - `,leaderboard <game>` / `,lb <game>` - View game leaderboard
+- Leaderboard shortcuts: `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`
 
 ### Shop (Coming Soon)
 - `,shop` - Preview cosmetic shop
@@ -76,8 +78,10 @@ Playground offers competitive PvP and solo games with interactive button-based U
 ### PvP Games (Connect 4, Tic Tac Toe, Word Duel)
 - **Elo Rating System** - Start at 1000, adjust based on opponent's rating
 - Beat stronger opponents = gain more points
-- Leaderboards sorted by Elo rating
+- **Minimum 5 games** required to appear on leaderboard
+- Leaderboards sorted by Elo rating, tiebreaker by total wins
 - Rating change shown after each match (+N ⭐)
+- **Anti-farming**: After 3 games/day vs same opponent, no Elo change (games still count)
 
 ### Solo Games (Wordle)
 - Leaderboards sorted by total wins
@@ -163,6 +167,11 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
+- **Leaderboard Ranking Overhaul** - PvP leaderboards now require 5 games to qualify, sorted by Elo with wins as tiebreaker
+- **Anti-Farming Protection** - After 3 games/day vs same opponent, games don't affect Elo (players notified)
+- **Leaderboard Shortcuts** - Use `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w` for quick access
+- **Connect 4 Text Input** - Type 1-7 to play columns, Q button to quit
+- **Match Found Auto-Delete** - "Match found" messages now auto-delete after 5 seconds for both players
 - **Clean Profile Format** - New clean layout with OVERALL, PVP, and RECENT MATCHES sections
 - **Clean Leaderboard Format** - Simplified display with wins/losses/win rate (removed emoji icons)
 - **Cross-Server Fixes** - Word Duel now properly updates both player channels when matched across servers

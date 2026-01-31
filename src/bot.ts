@@ -211,7 +211,18 @@ function clearLeaderboardCache(game?: string) {
 }
 
 async function handleLeaderboard(message: Message, args: string[]) {
-  const game = args[0]?.toLowerCase();
+  let game = args[0]?.toLowerCase();
+  
+  const shortcuts: Record<string, string> = {
+    c4: "connect4",
+    ttt: "tictactoe",
+    wd: "wordduel",
+    w: "wordle"
+  };
+  if (game && shortcuts[game]) {
+    game = shortcuts[game];
+  }
+  
   const validGames = ["connect4", "tictactoe", "wordduel", "wordle"];
   const gameLabels: Record<string, string> = {
     connect4: "CONNECT 4",
@@ -221,42 +232,57 @@ async function handleLeaderboard(message: Message, args: string[]) {
   };
   
   if (!game || !validGames.includes(game)) {
-    await message.channel.send(`Usage: ,leaderboard <game>\nGames: ${validGames.join(", ")}`);
+    await message.channel.send(`Usage: ,leaderboard <game>\nGames: connect4 (c4), tictactoe (ttt), wordduel (wd), wordle (w)`);
     return;
   }
   
   const cacheKey = game;
   const cached = leaderboardCache.get(cacheKey);
+  
+  let leaderboardSection: string;
+  
   if (cached && Date.now() - cached.timestamp < 60000) {
-    await message.channel.send(cached.data);
-    return;
+    leaderboardSection = cached.data;
+  } else {
+    const leaders = await storage.getLeaderboard(game);
+    
+    leaderboardSection = `**${gameLabels[game]} LEADERBOARD**\n\n`;
+    
+    if (leaders.length === 0) {
+      leaderboardSection += "No players yet. Be the first!\n";
+    } else {
+      for (let i = 0; i < leaders.length; i++) {
+        const stat = leaders[i];
+        const player = await storage.getPlayer(stat.discordId);
+        const displayName = player?.displayName || "Unknown";
+        const username = player?.username || "unknown";
+        
+        leaderboardSection += `${i + 1}. **${displayName}** (*@${username}*)\n`;
+        leaderboardSection += `   wins: ${stat.wins}  losses: ${stat.losses}  win rate: ${stat.winRate.toFixed(0)}%\n\n`;
+      }
+    }
+    
+    leaderboardCache.set(cacheKey, { data: leaderboardSection, timestamp: Date.now() });
   }
   
-  const leaders = await storage.getLeaderboard(game);
   const playerRank = await storage.getPlayerRank(message.author.id, game);
   const playerStats = await storage.getOrCreateGameStats(message.author.id, game);
   
-  let display = `**${gameLabels[game]} LEADERBOARD**\n\n`;
+  const isPvP = ["connect4", "tictactoe", "wordduel"].includes(game);
+  const totalGames = playerStats.wins + playerStats.losses;
+  const minGames = 5;
   
-  if (leaders.length === 0) {
-    display += "No players yet. Be the first!\n";
+  let userSection: string;
+  if (isPvP && totalGames < minGames) {
+    userSection = `**YOUR RANK:** Unranked\n`;
+    userSection += `wins: ${playerStats.wins}  losses: ${playerStats.losses}  win rate: ${playerStats.winRate.toFixed(0)}%\n`;
+    userSection += `*Play ${minGames - totalGames} more game${minGames - totalGames !== 1 ? 's' : ''} to qualify for rankings*`;
   } else {
-    for (let i = 0; i < leaders.length; i++) {
-      const stat = leaders[i];
-      const player = await storage.getPlayer(stat.discordId);
-      const displayName = player?.displayName || "Unknown";
-      const username = player?.username || "unknown";
-      
-      display += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-      display += `   wins: ${stat.wins}  losses: ${stat.losses}  win rate: ${stat.winRate.toFixed(0)}%\n\n`;
-    }
+    userSection = `**YOUR RANK:** ${playerRank}\n`;
+    userSection += `wins: ${playerStats.wins}  losses: ${playerStats.losses}  win rate: ${playerStats.winRate.toFixed(0)}%`;
   }
   
-  display += `**YOUR RANK:** ${playerRank}\n`;
-  display += `wins: ${playerStats.wins}  losses: ${playerStats.losses}  win rate: ${playerStats.winRate.toFixed(0)}%`;
-  
-  leaderboardCache.set(cacheKey, { data: display, timestamp: Date.now() });
-  await message.channel.send(display);
+  await message.channel.send(leaderboardSection + userSection);
 }
 
 async function handleShop(message: Message, _args: string[]) {
@@ -653,7 +679,7 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
   } else if (gameType === "connect4") {
     buttons = ui.createConnect4Board(state, game.id);
     const display = ui.createConnect4Display(state);
-    content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${player1Name}**'s turn\n`;
+    content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${player1Name}**'s turn (type 1-7 or click)\n`;
   } else if (gameType === "wordduel") {
     const scrambled = state.scrambledWords[0].toUpperCase();
     content = `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**\nType your answer!`;
@@ -743,14 +769,15 @@ async function handleGameCommand(message: Message, gameType: string) {
       
       const channel = message.channel as TextChannel;
       const matchFoundMsg = `<@${playerId}> vs <@${match.discordId}> - Match found! Starting **${gameType.toUpperCase()}**...`;
-      await channel.send(matchFoundMsg);
+      const msg1 = await channel.send(matchFoundMsg);
+      setTimeout(() => { try { msg1.delete(); } catch (e) {} }, 5000);
       
-      // Send match found notification to opponent's channel if different
       if (match.channelId && match.channelId !== channel.id) {
         try {
           const player2Channel = await client.channels.fetch(match.channelId) as TextChannel;
           if (player2Channel) {
-            await player2Channel.send(matchFoundMsg);
+            const msg2 = await player2Channel.send(matchFoundMsg);
+            setTimeout(() => { try { msg2.delete(); } catch (e) {} }, 5000);
           }
         } catch (e) {}
       }
@@ -877,10 +904,12 @@ async function handleQuit(message: Message) {
     const opponentName = await getPlayerName(opponentId);
     
     if (PVP_GAMES.includes(game.gameType)) {
-      const { winnerChange } = await storage.recordPvPResult(opponentId, playerId, game.gameType, opponentName, playerName);
+      const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(opponentId, playerId, game.gameType, opponentName, playerName);
       clearLeaderboardCache(game.gameType);
       await storage.recordForfeit(playerId);
-      await sendToGameChannels(game, { content: `**${playerName}** forfeited. **${opponentName}** wins! (+${winnerChange})` });
+      const eloText = eloAffected ? ` (+${winnerChange})` : "";
+      const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
+      await sendToGameChannels(game, { content: `**${playerName}** forfeited. **${opponentName}** wins!${eloText}${noEloNote}` });
     } else {
       await storage.recordGameResult(playerId, game.gameType, "loss");
       await storage.recordGameResult(opponentId, game.gameType, "win");
@@ -938,11 +967,13 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
         
         let eloText = "";
+        let noEloNote = "";
         if (matchResult.winner) {
           const winnerName = await getPlayerName(winnerId);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
-          eloText = ` (+${winnerChange})`;
+          const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "tictactoe", winnerName, loserName);
+          eloText = eloAffected ? ` (+${winnerChange})` : "";
+          noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
           clearLeaderboardCache("tictactoe");
         }
         
@@ -954,7 +985,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
         const rematchBtn = ui.createRematchButton("tictactoe", state.player1Id, state.player2Id);
         buttons.push(rematchBtn);
         const scoreText = state.maxRounds > 1 ? `\nFinal Score: ${state.roundWins[0]} - ${state.roundWins[1]}` : "";
-        const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🎉 **${winnerName}** wins the match!${eloText}`;
+        const content = `**TIC TAC TOE**\n\n${player1Name} vs ${player2Name}${scoreText}\n\n🎉 **${winnerName}** wins the match!${eloText}${noEloNote}`;
         
         await interaction.deferUpdate();
         await syncGameMessages(game, content, buttons);
@@ -1053,7 +1084,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       
       const winnerName = await getPlayerName(winnerId);
       const loserName = await getPlayerName(loserId);
-      const { winnerChange } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
+      const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
       clearLeaderboardCache("connect4");
       
       clearGameTimer(game.id);
@@ -1062,7 +1093,9 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const buttons = ui.createConnect4Board(state, game.id, true);
       const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
       buttons.push(rematchBtn);
-      const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins! (+${winnerChange})`;
+      const eloText = eloAffected ? ` (+${winnerChange})` : "";
+      const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
+      const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}`;
       
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
@@ -1088,7 +1121,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     
     const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(state));
     const buttons = ui.createConnect4Board(state, game.id);
-    const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn`;
+    const content = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn (type 1-7 or click)`;
     
     await interaction.deferUpdate();
     await syncGameMessages(game, content, buttons);
@@ -1117,9 +1150,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       const opponentName = await getPlayerName(opponentId);
       
       let eloText = "";
+      let noEloNote = "";
       if (PVP_GAMES.includes(game.gameType)) {
-        const { winnerChange } = await storage.recordPvPResult(opponentId, userId, game.gameType, opponentName, userName);
-        eloText = ` (+${winnerChange})`;
+        const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(opponentId, userId, game.gameType, opponentName, userName);
+        eloText = eloAffected ? ` (+${winnerChange})` : "";
+        noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
         clearLeaderboardCache(game.gameType);
       } else {
         await storage.recordGameResult(userId, game.gameType, "loss");
@@ -1128,7 +1163,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await storage.recordForfeit(userId);
       
       await interaction.update({
-        content: `**${userName}** forfeited. **${opponentName}** wins!${eloText}`,
+        content: `**${userName}** forfeited. **${opponentName}** wins!${eloText}${noEloNote}`,
         components: []
       });
     } else {
@@ -1230,12 +1265,14 @@ async function handleTextGameInput(message: Message) {
       if (!hasMore || wordduel.isGameOver(state)) {
         const winner = wordduel.getWinner(state);
         let eloText = "";
+        let noEloNote = "";
         if (winner) {
           const loserId = winner === state.player1Id ? state.player2Id : state.player1Id;
           const winnerName = await getPlayerName(winner);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
-          eloText = ` (+${winnerChange})`;
+          const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
+          eloText = eloAffected ? ` (+${winnerChange})` : "";
+          noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
           clearLeaderboardCache("wordduel");
         }
         
@@ -1243,7 +1280,7 @@ async function handleTextGameInput(message: Message) {
         await storage.endGame(game.id);
         
         const winnerName = winner ? await getPlayerName(winner) : null;
-        const resultText = winnerName ? `🎉 **${winnerName}** wins!${eloText}` : "It's a draw!";
+        const resultText = winnerName ? `🎉 **${winnerName}** wins!${eloText}${noEloNote}` : "It's a draw!";
         const rematchBtn = ui.createRematchButton("wordduel", state.player1Id, state.player2Id);
         await sendToGameChannels(game, {
           content: `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
@@ -1255,6 +1292,73 @@ async function handleTextGameInput(message: Message) {
       const previousWord = state.words[state.currentWordIndex - 1];
       const scrambled = state.scrambledWords[state.currentWordIndex].toUpperCase();
       await sendToGameChannels(game, { content: `**${playerName}** got it! The word was: **${previousWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound ${state.currentWordIndex + 1}/5 | Score: ${state.scores[0]} - ${state.scores[1]}\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**` });
+      resetGameTimer(game.id, message.channel as TextChannel);
+    }
+  }
+  
+  else if (game.gameType === "connect4") {
+    if (/^[1-7]$/.test(content)) {
+      const col = parseInt(content) - 1;
+      const expectedPlayer = state.currentPlayer === 1 ? state.player1Id : state.player2Id;
+      
+      if (playerId !== expectedPlayer) {
+        return;
+      }
+      
+      const result = connect4.dropPiece(state, col);
+      if (!result.success) {
+        await message.reply("Column is full!");
+        return;
+      }
+      
+      const player1Name = await getPlayerName(state.player1Id);
+      const player2Name = await getPlayerName(state.player2Id);
+      const display = ui.createConnect4Display(state);
+      
+      if (connect4.checkWin(state.board, state.currentPlayer)) {
+        const winnerId = connect4.getCurrentPlayerId(state);
+        const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
+        
+        const winnerName = await getPlayerName(winnerId);
+        const loserName = await getPlayerName(loserId);
+        const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "connect4", winnerName, loserName);
+        clearLeaderboardCache("connect4");
+        
+        clearGameTimer(game.id);
+        await storage.endGame(game.id);
+        
+        const buttons = ui.createConnect4Board(state, game.id, true);
+        const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
+        buttons.push(rematchBtn);
+        const eloText = eloAffected ? ` (+${winnerChange})` : "";
+        const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
+        const messageContent = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}`;
+        
+        await syncGameMessages(game, messageContent, buttons);
+        return;
+      }
+      
+      if (connect4.isBoardFull(state.board)) {
+        clearGameTimer(game.id);
+        await storage.endGame(game.id);
+        
+        const buttons = ui.createConnect4Board(state, game.id, true);
+        const rematchBtn = ui.createRematchButton("connect4", state.player1Id, state.player2Id);
+        buttons.push(rematchBtn);
+        const messageContent = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's a draw!`;
+        
+        await syncGameMessages(game, messageContent, buttons);
+        return;
+      }
+      
+      connect4.switchTurn(state);
+      await storage.updateGameState(game.id, state, connect4.getCurrentPlayerId(state));
+      
+      const nextPlayerName = await getPlayerName(connect4.getCurrentPlayerId(state));
+      const buttons = ui.createConnect4Board(state, game.id);
+      const messageContent = `**CONNECT 4**\n\n${player1Name} vs ${player2Name}\n\n${display}\n\nIt's **${nextPlayerName}**'s turn (type 1-7 or click)`;
+      
+      await syncGameMessages(game, messageContent, buttons);
       resetGameTimer(game.id, message.channel as TextChannel);
     }
   }
@@ -1437,15 +1541,16 @@ function startGameTimer(gameId: string, channel: TextChannel) {
       await storage.updateGameState(game.id, state);
       
       if (!hasMore || wordduel.isGameOver(state)) {
-        // Game over
         const winner = wordduel.getWinner(state);
         let eloText = "";
+        let noEloNote = "";
         if (winner) {
           const loserId = winner === state.player1Id ? state.player2Id : state.player1Id;
           const winnerName = await getPlayerName(winner);
           const loserName = await getPlayerName(loserId);
-          const { winnerChange } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
-          eloText = ` (+${winnerChange})`;
+          const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winner, loserId, "wordduel", winnerName, loserName);
+          eloText = eloAffected ? ` (+${winnerChange})` : "";
+          noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
           clearLeaderboardCache("wordduel");
         }
         
@@ -1453,7 +1558,7 @@ function startGameTimer(gameId: string, channel: TextChannel) {
         gameTimers.delete(gameId);
         
         const winnerName = winner ? await getPlayerName(winner) : null;
-        const resultText = winnerName ? `**${winnerName}** wins!${eloText}` : "It's a draw!";
+        const resultText = winnerName ? `**${winnerName}** wins!${eloText}${noEloNote}` : "It's a draw!";
         const rematchBtn = ui.createRematchButton("wordduel", state.player1Id, state.player2Id);
         await sendToGameChannels(game, {
           content: `Time's up! The word was: **${currentWord.toUpperCase()}**\n\n**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nFinal Score: ${state.scores[0]} - ${state.scores[1]}\n\n${resultText}`,
@@ -1481,15 +1586,17 @@ function startGameTimer(gameId: string, channel: TextChannel) {
       const winnerName = await getPlayerName(opponentId);
       
       let eloText = "";
+      let noEloNote = "";
       if (PVP_GAMES.includes(game.gameType)) {
-        const { winnerChange } = await storage.recordPvPResult(opponentId, currentPlayerId, game.gameType, winnerName, timedOutName);
-        eloText = ` (+${winnerChange})`;
+        const { winnerChange: change, eloAffected, dailyGamesCount } = await storage.recordPvPResult(opponentId, currentPlayerId, game.gameType, winnerName, timedOutName);
+        eloText = eloAffected ? ` (+${change})` : "";
+        noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
         clearLeaderboardCache(game.gameType);
       } else {
         await storage.recordGameResult(currentPlayerId, game.gameType, "loss");
         await storage.recordGameResult(opponentId, game.gameType, "win");
       }
-      await sendToGameChannels(game, { content: `**${timedOutName}** timed out. **${winnerName}** wins!${eloText}` });
+      await sendToGameChannels(game, { content: `**${timedOutName}** timed out. **${winnerName}** wins!${eloText}${noEloNote}` });
     }
     
     await storage.endGame(gameId);

@@ -150,20 +150,21 @@ export async function recordPvPResult(
   winnerName?: string,
   loserName?: string,
   duration?: number
-): Promise<{ winnerChange: number; loserChange: number; coinsEarned: number }> {
+): Promise<{ winnerChange: number; loserChange: number; coinsEarned: number; eloAffected: boolean; dailyGamesCount: number }> {
   const winnerStats = await getOrCreateGameStats(winnerId, game);
   const loserStats = await getOrCreateGameStats(loserId, game);
   const winnerPlayer = await getPlayer(winnerId);
   const loserPlayer = await getPlayer(loserId);
   
-  const eloChange = calculateEloChange(winnerStats.eloRating, loserStats.eloRating);
+  const { affects: eloAffected, gamesPlayed: dailyGamesCount } = await shouldAffectElo(winnerId, loserId, game);
+  const eloChange = eloAffected ? calculateEloChange(winnerStats.eloRating, loserStats.eloRating) : 0;
   
   const winnerWins = winnerStats.wins + 1;
   const winnerWinStreak = winnerStats.winStreak + 1;
   const winnerBestStreak = Math.max(winnerStats.bestStreak, winnerWinStreak);
   const winnerTotalGames = winnerWins + winnerStats.losses;
   const winnerWinRate = winnerTotalGames > 0 ? (winnerWins / winnerTotalGames) * 100 : 0;
-  const winnerNewElo = winnerStats.eloRating + eloChange;
+  const winnerNewElo = eloAffected ? winnerStats.eloRating + eloChange : winnerStats.eloRating;
   
   await db.update(gameStats)
     .set({ 
@@ -179,7 +180,7 @@ export async function recordPvPResult(
   const loserLosses = loserStats.losses + 1;
   const loserTotalGames = loserStats.wins + loserLosses;
   const loserWinRate = loserTotalGames > 0 ? (loserStats.wins / loserTotalGames) * 100 : 0;
-  const loserNewElo = Math.max(100, loserStats.eloRating - eloChange);
+  const loserNewElo = eloAffected ? Math.max(100, loserStats.eloRating - eloChange) : loserStats.eloRating;
   
   await db.update(gameStats)
     .set({ 
@@ -210,8 +211,8 @@ export async function recordPvPResult(
     player2Name: loserName || loserPlayer?.displayName || loserPlayer?.username,
     winnerId: winnerId,
     result: "win",
-    player1EloChange: eloChange,
-    player2EloChange: -eloChange,
+    player1EloChange: eloAffected ? eloChange : 0,
+    player2EloChange: eloAffected ? -eloChange : 0,
     duration: duration,
   });
   
@@ -220,7 +221,7 @@ export async function recordPvPResult(
   
   const coinsEarned = await awardWinCoins(winnerId);
   
-  return { winnerChange: eloChange, loserChange: -eloChange, coinsEarned };
+  return { winnerChange: eloChange, loserChange: -eloChange, coinsEarned, eloAffected, dailyGamesCount: dailyGamesCount + 1 };
 }
 
 export async function getMatchHistory(discordId: string, limit: number = 5) {
@@ -305,13 +306,40 @@ const PVP_GAMES = ["tictactoe", "connect4", "wordduel"];
 
 export async function getLeaderboard(game: string, limit = 10): Promise<GameStat[]> {
   const isPvP = PVP_GAMES.includes(game);
+  const minGames = isPvP ? 5 : 0;
+  
   return db.query.gameStats.findMany({
-    where: eq(gameStats.game, game),
+    where: isPvP 
+      ? and(eq(gameStats.game, game), sql`${gameStats.wins} + ${gameStats.losses} >= ${minGames}`)
+      : eq(gameStats.game, game),
     orderBy: isPvP 
       ? [desc(gameStats.eloRating), desc(gameStats.wins)]
       : [desc(gameStats.wins), desc(gameStats.winRate)],
     limit,
   });
+}
+
+export async function getDailyGamesCount(player1Id: string, player2Id: string, gameType: string): Promise<number> {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const matches = await db.query.matchHistory.findMany({
+    where: and(
+      eq(matchHistory.gameType, gameType),
+      or(
+        and(eq(matchHistory.player1Id, player1Id), eq(matchHistory.player2Id, player2Id)),
+        and(eq(matchHistory.player1Id, player2Id), eq(matchHistory.player2Id, player1Id))
+      ),
+      gt(matchHistory.completedAt, startOfDay)
+    ),
+  });
+  
+  return matches.length;
+}
+
+export async function shouldAffectElo(player1Id: string, player2Id: string, gameType: string): Promise<{ affects: boolean; gamesPlayed: number }> {
+  const gamesPlayed = await getDailyGamesCount(player1Id, player2Id, gameType);
+  return { affects: gamesPlayed < 3, gamesPlayed };
 }
 
 export async function getPlayerRank(discordId: string, game: string): Promise<number> {
