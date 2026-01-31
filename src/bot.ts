@@ -349,11 +349,17 @@ function getBotTicTacToeMove(state: any): number {
 }
 
 async function makeBotMove(game: any, channel: TextChannel): Promise<void> {
-  const freshGame = await storage.getActiveGameById(game.id);
-  if (!freshGame) return;
-  
-  const freshState = freshGame.state as any;
-  const freshGameType = freshGame.gameType;
+  try {
+    console.log(`makeBotMove called for game ${game.id}, type: ${game.gameType}`);
+    
+    const freshGame = await storage.getActiveGameById(game.id);
+    if (!freshGame) {
+      console.log(`makeBotMove: Game ${game.id} not found`);
+      return;
+    }
+    
+    const freshState = freshGame.state as any;
+    const freshGameType = freshGame.gameType;
   
   const currentPlayerId = freshGameType === "connect4" 
     ? connect4.getCurrentPlayerId(freshState) 
@@ -505,6 +511,9 @@ async function makeBotMove(game: any, channel: TextChannel): Promise<void> {
         resetGameTimer(latestGame.id, channel);
       }
     }
+  }
+  } catch (error) {
+    console.error(`makeBotMove error for game ${game.id}:`, error);
   }
 }
 
@@ -1548,7 +1557,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       }
       
       tictactoe.resetBoard(state);
-      await storage.updateGameState(game.id, state);
+      await storage.updateGameState(game.id, state, tictactoe.getCurrentPlayerId(state));
       
       const nextPlayerId = tictactoe.getCurrentPlayerId(state);
       const nextPlayerName = await getPlayerName(nextPlayerId);
@@ -1559,12 +1568,12 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
       
-      if (nextPlayerId === BOT_PLAYER_ID) {
+      if (nextPlayerId === BOT_PLAYER_ID && interaction.channel) {
         const updatedGame = await storage.getActiveGameById(game.id);
         if (updatedGame) {
           setTimeout(() => makeBotMove(updatedGame, interaction.channel as TextChannel), 1500);
         }
-      } else {
+      } else if (interaction.channel) {
         resetGameTimer(game.id, interaction.channel as TextChannel);
       }
       return;
@@ -1589,7 +1598,7 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       }
       
       tictactoe.resetBoard(state);
-      await storage.updateGameState(game.id, state);
+      await storage.updateGameState(game.id, state, tictactoe.getCurrentPlayerId(state));
       
       const nextPlayerId = tictactoe.getCurrentPlayerId(state);
       const nextPlayerName = await getPlayerName(nextPlayerId);
@@ -1600,12 +1609,12 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       await interaction.deferUpdate();
       await syncGameMessages(game, content, buttons);
       
-      if (nextPlayerId === BOT_PLAYER_ID) {
+      if (nextPlayerId === BOT_PLAYER_ID && interaction.channel) {
         const updatedGame = await storage.getActiveGameById(game.id);
         if (updatedGame) {
           setTimeout(() => makeBotMove(updatedGame, interaction.channel as TextChannel), 1500);
         }
-      } else {
+      } else if (interaction.channel) {
         resetGameTimer(game.id, interaction.channel as TextChannel);
       }
       return;
@@ -1623,12 +1632,13 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     await interaction.deferUpdate();
     await syncGameMessages(game, content, buttons);
     
-    if (nextPlayerId === BOT_PLAYER_ID) {
+    if (nextPlayerId === BOT_PLAYER_ID && interaction.channel) {
       const updatedGame = await storage.getActiveGameById(game.id);
       if (updatedGame) {
+        console.log(`Triggering bot move for TTT game ${game.id}`);
         setTimeout(() => makeBotMove(updatedGame, interaction.channel as TextChannel), 1500);
       }
-    } else {
+    } else if (interaction.channel) {
       resetGameTimer(game.id, interaction.channel as TextChannel);
     }
   }

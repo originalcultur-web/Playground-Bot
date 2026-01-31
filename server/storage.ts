@@ -304,14 +304,20 @@ export async function recordGameResult(
 
 const PVP_GAMES = ["tictactoe", "connect4", "wordduel"];
 
+const BOT_PLAYER_ID = "BOT_PLAY_123456789";
+
 export async function getLeaderboard(game: string, limit = 10): Promise<GameStat[]> {
   const isPvP = PVP_GAMES.includes(game);
   const minGames = isPvP ? 5 : 0;
   
   return db.query.gameStats.findMany({
     where: isPvP 
-      ? and(eq(gameStats.game, game), sql`${gameStats.wins} + ${gameStats.losses} >= ${minGames}`)
-      : eq(gameStats.game, game),
+      ? and(
+          eq(gameStats.game, game), 
+          sql`${gameStats.wins} + ${gameStats.losses} >= ${minGames}`,
+          sql`${gameStats.discordId} != ${BOT_PLAYER_ID}`
+        )
+      : and(eq(gameStats.game, game), sql`${gameStats.discordId} != ${BOT_PLAYER_ID}`),
     orderBy: isPvP 
       ? [desc(gameStats.eloRating), desc(gameStats.wins)]
       : [desc(gameStats.wins), desc(gameStats.winRate)],
