@@ -653,6 +653,7 @@ async function handleHelp(message: Message) {
 
 **Other:**
 \`${prefix}ping\` - Check bot latency
+\`${prefix}setprefix <prefix>\` - Change bot prefix (admin only)
 \`${prefix}staff\` - View staff team
 \`${prefix}accept\` - Accept a challenge`;
 
