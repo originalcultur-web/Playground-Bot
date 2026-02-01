@@ -302,15 +302,31 @@ export async function recordGameResult(
   return coinsEarned;
 }
 
-const PVP_GAMES = ["tictactoe", "connect4", "wordduel"];
+const PVP_GAMES = ["tictactoe", "connect4", "wordduel", "rps", "triviaduel", "mathblitz", "battleship"];
 
 const BOT_PLAYER_ID = "BOT_PLAY_123456789";
+
+export async function recordWordleWin(discordId: string, completionTimeSeconds: number): Promise<void> {
+  const stats = await getOrCreateGameStats(discordId, "wordle");
+  const currentExtra = (stats.extraStats as Record<string, any>) || {};
+  const currentBestTime = currentExtra.bestTime as number | undefined;
+  
+  const newBestTime = currentBestTime === undefined 
+    ? completionTimeSeconds 
+    : Math.min(currentBestTime, completionTimeSeconds);
+  
+  await db.update(gameStats)
+    .set({ 
+      extraStats: { ...currentExtra, bestTime: newBestTime }
+    })
+    .where(and(eq(gameStats.discordId, discordId), eq(gameStats.game, "wordle")));
+}
 
 export async function getLeaderboard(game: string, limit = 10): Promise<GameStat[]> {
   const isPvP = PVP_GAMES.includes(game);
   const minGames = isPvP ? 5 : 0;
   
-  return db.query.gameStats.findMany({
+  const results = await db.query.gameStats.findMany({
     where: isPvP 
       ? and(
           eq(gameStats.game, game), 
@@ -321,8 +337,19 @@ export async function getLeaderboard(game: string, limit = 10): Promise<GameStat
     orderBy: isPvP 
       ? [desc(gameStats.eloRating), desc(gameStats.wins)]
       : [desc(gameStats.wins), desc(gameStats.winRate)],
-    limit,
+    limit: limit * 2,
   });
+  
+  if (game === "wordle") {
+    results.sort((a, b) => {
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      const aTime = (a.extraStats as any)?.bestTime ?? Infinity;
+      const bTime = (b.extraStats as any)?.bestTime ?? Infinity;
+      return aTime - bTime;
+    });
+  }
+  
+  return results.slice(0, limit);
 }
 
 export async function getDailyGamesCount(player1Id: string, player2Id: string, gameType: string): Promise<number> {

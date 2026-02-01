@@ -13,12 +13,17 @@ import * as connect4 from "./games/connect4.js";
 import * as tictactoe from "./games/tictactoe.js";
 import * as wordduel from "./games/wordduel.js";
 import * as wordle from "./games/wordle.js";
+import * as rps from "./games/rps.js";
+import * as hangman from "./games/hangman.js";
+import * as triviaduel from "./games/triviaduel.js";
+import * as mathblitz from "./games/mathblitz.js";
+import * as battleship from "./games/battleship.js";
 import * as ui from "./ui/gameComponents.js";
 
 const PREFIX = ",";
 const AFK_TIMEOUT = 60000;
 const BOT_PLAYER_ID = "BOT_PLAY_123456789";
-const BOT_GAMES = ["connect4", "tictactoe"];
+const BOT_GAMES = ["connect4"];
 
 const client = new Client({
   intents: [
@@ -565,11 +570,18 @@ async function handleHelp(message: Message) {
   
   let help = `**PLAYGROUND - Commands**
 
-**Games:**
-\`,connect4\` - Play Connect 4 (queue or @user)
-\`,tictactoe\` - Play Tic Tac Toe (queue or @user)
-\`,wordduel\` - Play Word Duel (queue or @user)
-\`,wordle\` - Play Wordle (solo)
+**Games (PvP):**
+\`,connect4\` / \`,c4\` - Play Connect 4
+\`,tictactoe\` / \`,ttt\` - Play Tic Tac Toe
+\`,wordduel\` / \`,wd\` - Play Word Duel
+\`,rps\` - Play Rock Paper Scissors
+\`,trivia\` / \`,td\` - Play Trivia Duel
+\`,math\` / \`,mb\` - Play Math Blitz
+\`,battleship\` / \`,bs\` - Play Battleship
+
+**Games (Solo):**
+\`,wordle\` / \`,w\` - Play Wordle
+\`,hangman\` / \`,hm\` - Play Hangman
 
 **During Games:**
 \`,quit\` - Forfeit current game
@@ -680,7 +692,7 @@ async function handleProfile(message: Message, args: string[]) {
   await message.channel.send(profile);
 }
 
-const PVP_GAMES = ["tictactoe", "connect4", "wordduel"];
+const PVP_GAMES = ["tictactoe", "connect4", "wordduel", "rps", "triviaduel", "mathblitz", "battleship"];
 
 function clearLeaderboardCache(game?: string) {
   if (game) {
@@ -697,22 +709,31 @@ async function handleLeaderboard(message: Message, args: string[]) {
     c4: "connect4",
     ttt: "tictactoe",
     wd: "wordduel",
-    w: "wordle"
+    w: "wordle",
+    hm: "hangman",
+    td: "triviaduel",
+    mb: "mathblitz",
+    bs: "battleship"
   };
   if (game && shortcuts[game]) {
     game = shortcuts[game];
   }
   
-  const validGames = ["connect4", "tictactoe", "wordduel", "wordle"];
+  const validGames = ["connect4", "tictactoe", "wordduel", "wordle", "rps", "hangman", "triviaduel", "mathblitz", "battleship"];
   const gameLabels: Record<string, string> = {
     connect4: "CONNECT 4",
     tictactoe: "TIC TAC TOE",
     wordduel: "WORD DUEL",
-    wordle: "WORDLE"
+    wordle: "WORDLE",
+    rps: "ROCK PAPER SCISSORS",
+    hangman: "HANGMAN",
+    triviaduel: "TRIVIA DUEL",
+    mathblitz: "MATH BLITZ",
+    battleship: "BATTLESHIP"
   };
   
   if (!game || !validGames.includes(game)) {
-    await message.channel.send(`Usage: ,leaderboard <game>\nGames: connect4 (c4), tictactoe (ttt), wordduel (wd), wordle (w)`);
+    await message.channel.send(`Usage: ,leaderboard <game>\nGames: connect4 (c4), tictactoe (ttt), wordduel (wd), wordle (w), rps, hangman (hm), trivia (td), math (mb), battleship (bs)`);
     return;
   }
   
@@ -738,7 +759,14 @@ async function handleLeaderboard(message: Message, args: string[]) {
         const username = player?.username || "unknown";
         
         leaderboardSection += `${i + 1}. **${displayName}** (*@${username}*)\n`;
-        leaderboardSection += `   wins: ${stat.wins}  losses: ${stat.losses}  win rate: ${stat.winRate.toFixed(0)}%\n\n`;
+        
+        if (game === "wordle") {
+          const bestTime = (stat.extraStats as any)?.bestTime;
+          const timeStr = bestTime ? `  best: ${bestTime}s` : "";
+          leaderboardSection += `   wins: ${stat.wins}  losses: ${stat.losses}${timeStr}\n\n`;
+        } else {
+          leaderboardSection += `   wins: ${stat.wins}  losses: ${stat.losses}  win rate: ${stat.winRate.toFixed(0)}%\n\n`;
+        }
       }
     }
     
@@ -748,7 +776,7 @@ async function handleLeaderboard(message: Message, args: string[]) {
   const playerRank = await storage.getPlayerRank(message.author.id, game);
   const playerStats = await storage.getOrCreateGameStats(message.author.id, game);
   
-  const isPvP = ["connect4", "tictactoe", "wordduel"].includes(game);
+  const isPvP = ["connect4", "tictactoe", "wordduel", "rps", "triviaduel", "mathblitz", "battleship"].includes(game);
   const totalGames = playerStats.wins + playerStats.losses;
   const minGames = 5;
   
@@ -759,7 +787,13 @@ async function handleLeaderboard(message: Message, args: string[]) {
     userSection += `*Play ${minGames - totalGames} more game${minGames - totalGames !== 1 ? 's' : ''} to qualify for rankings*`;
   } else {
     userSection = `**YOUR RANK:** ${playerRank}\n`;
-    userSection += `wins: ${playerStats.wins}  losses: ${playerStats.losses}  win rate: ${playerStats.winRate.toFixed(0)}%`;
+    if (game === "wordle") {
+      const bestTime = (playerStats.extraStats as any)?.bestTime;
+      const timeStr = bestTime ? `  best: ${bestTime}s` : "";
+      userSection += `wins: ${playerStats.wins}  losses: ${playerStats.losses}${timeStr}`;
+    } else {
+      userSection += `wins: ${playerStats.wins}  losses: ${playerStats.losses}  win rate: ${playerStats.winRate.toFixed(0)}%`;
+    }
   }
   
   await message.channel.send(leaderboardSection + userSection);
@@ -1032,10 +1066,47 @@ async function handleRules(message: Message, args: string[]) {
   - Yellow letter = wrong position
   - Gray letter = not in word
 - Solo game, wins count toward leaderboard`,
+    
+    rps: `**Rock Paper Scissors Rules**
+- Best of 3 rounds
+- Both players choose rock, paper, or scissors
+- Rock beats scissors, scissors beats paper, paper beats rock
+- First to win 2 rounds wins the match
+- Click the button to make your choice
+- Ranked game with Elo rating`,
+    
+    hangman: `**Hangman Rules**
+- Guess the hidden 5-letter word
+- Click letter buttons to guess
+- 6 wrong guesses allowed
+- Solo game, wins count toward leaderboard`,
+    
+    triviaduel: `**Trivia Duel Rules**
+- 5 rounds of trivia questions
+- First to answer correctly scores a point
+- Click the button to select your answer
+- Player with most points wins
+- Ranked game with Elo rating`,
+    
+    mathblitz: `**Math Blitz Rules**
+- 5 rounds of math problems
+- First to type the correct answer scores a point
+- Problems include +, -, ×, ÷
+- Player with most points wins
+- First to 3 wins the match
+- Ranked game with Elo rating`,
+    
+    battleship: `**Battleship Rules**
+- Each player has 2 ships on a 5x5 grid
+- Take turns firing at opponent's grid
+- Type coordinates (e.g., A1, B3) or click buttons
+- Sink all enemy ships to win
+- 💥 = Hit, 💨 = Miss
+- Ranked game with Elo rating`,
   };
   
   if (!game || !rules[game]) {
-    await message.channel.send(`Usage: \`,rules <game>\`\nGames: connect4, tictactoe, wordduel, wordle`);
+    await message.channel.send(`Usage: \`,rules <game>\`\nGames: connect4, tictactoe, wordduel, wordle, rps, hangman, triviaduel, mathblitz, battleship`);
     return;
   }
   
@@ -1139,6 +1210,20 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
     case "wordduel":
       state = wordduel.createGameState(player1Id, player2Id);
       break;
+    case "rps":
+      state = rps.createGameState(player1Id, player2Id);
+      break;
+    case "triviaduel":
+      state = triviaduel.createGameState(player1Id, player2Id);
+      triviaduel.getNextQuestion(state);
+      break;
+    case "mathblitz":
+      state = mathblitz.createGameState(player1Id, player2Id);
+      mathblitz.getNextProblem(state);
+      break;
+    case "battleship":
+      state = battleship.createGameState(player1Id, player2Id);
+      break;
     default:
       return;
   }
@@ -1163,6 +1248,18 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
   } else if (gameType === "wordduel") {
     const scrambled = state.scrambledWords[0].toUpperCase();
     content = `**WORD DUEL**\n\n${player1Name} vs ${player2Name}\nRound 1/5 | Score: 0 - 0\n\n⏱️ **3... 2... 1... GO!**\n\nUnscramble: **${scrambled}**\nType your answer!`;
+  } else if (gameType === "rps") {
+    buttons = [ui.createRPSButtons(game.id)];
+    content = `**ROCK PAPER SCISSORS**\n\n${player1Name} ⏳ vs ⏳ ${player2Name}\n\nScore: **0** - **0**\nBest of 3\n\nChoose your weapon!`;
+  } else if (gameType === "triviaduel") {
+    buttons = ui.createTriviaDuelButtons(game.id, state.currentQuestion.answers);
+    content = `**TRIVIA DUEL**\n\n${player1Name} ⏳ vs ⏳ ${player2Name}\nScore: **0** - **0**\n\n📚 *${state.currentQuestion.category}*\n\n**${state.currentQuestion.question}**\n\nRound 1/${state.maxRounds}`;
+  } else if (gameType === "mathblitz") {
+    content = `**MATH BLITZ**\n\n${player1Name} ⏳ vs ⏳ ${player2Name}\nScore: **0** - **0**\n\n🧮 **${state.currentProblem.question} = ?**\n\nType your answer!\n\nRound 1/${state.maxRounds}`;
+  } else if (gameType === "battleship") {
+    const shooterBoard = state.player1Board;
+    buttons = ui.createBattleshipButtons(game.id, shooterBoard);
+    content = `**BATTLESHIP**\n\n${player1Name} vs ${player2Name}\n\nYour ships: 2/2 | Enemy ships: 2/2\n\n**${player1Name}**'s turn! Type a coordinate (e.g., A1, B3) or click a button.`;
   }
   
   const messageOptions = gameType === "wordduel" ? { content } : { content, components: buttons };
@@ -1381,7 +1478,11 @@ async function handleAccept(message: Message) {
   const gameNames: Record<string, string> = {
     tictactoe: "Tic Tac Toe",
     connect4: "Connect 4",
-    wordduel: "Word Duel"
+    wordduel: "Word Duel",
+    rps: "Rock Paper Scissors",
+    triviaduel: "Trivia Duel",
+    mathblitz: "Math Blitz",
+    battleship: "Battleship"
   };
   const gameName = gameNames[challenge.gameType] || challenge.gameType;
   const challengerName = challengerPlayer.displayName || challengerPlayer.username;
@@ -1415,6 +1516,22 @@ async function handleSoloGame(message: Message, gameType: string) {
     const wordleGuide = `🟩 = Correct letter, correct spot\n🟨 = Correct letter, wrong spot\n⬛ = Letter not in word`;
     sentMessage = await message.channel.send({
       content: `**WORDLE**\n\n${wordleGuide}\n\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n🔲🔲🔲🔲🔲\n\nGuesses: 0/6\nType a 5-letter word to guess!`
+    });
+    
+    if (sentMessage) {
+      gameMessages.set(game.id, sentMessage.id);
+    }
+  } else if (gameType === "hangman") {
+    state = hangman.createGameState(playerId);
+    const game = await storage.createActiveGame(gameType, playerId, message.channel.id, state);
+    
+    const figure = hangman.getHangmanFigure(0);
+    const displayWord = hangman.getDisplayWord(state);
+    const buttons = ui.createHangmanButtons(game.id, state.guessedLetters);
+    
+    sentMessage = await message.channel.send({
+      content: `**HANGMAN**\n\n${figure}\n\n**Word:** \`${displayWord}\`\n\nGuesses left: ${state.maxWrongGuesses - state.wrongGuesses}`,
+      components: buttons
     });
     
     if (sentMessage) {
@@ -1836,7 +1953,11 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     const gameNames: Record<string, string> = {
       tictactoe: "Tic Tac Toe",
       connect4: "Connect 4",
-      wordduel: "Word Duel"
+      wordduel: "Word Duel",
+      rps: "Rock Paper Scissors",
+      triviaduel: "Trivia Duel",
+      mathblitz: "Math Blitz",
+      battleship: "Battleship"
     };
     
     await interaction.reply({ 
@@ -1860,6 +1981,326 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
     await interaction.reply({
       content: `**${senderName}** says GG! 🤝 <@${opponentId}>`
     });
+  }
+  
+  else if (customId.startsWith("rps_")) {
+    const parts = customId.split("_");
+    const gameId = parts[1];
+    const choice = parts[2];
+    
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    const state = game.state as any;
+    
+    if (userId !== state.player1Id && userId !== state.player2Id) {
+      await interaction.reply({ content: "You're not in this game!", ephemeral: true });
+      return;
+    }
+    
+    const madeChoice = rps.makeChoice(state, userId, choice);
+    if (!madeChoice) {
+      await interaction.reply({ content: "You've already made your choice!", ephemeral: true });
+      return;
+    }
+    
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
+    
+    if (rps.bothPlayersChose(state)) {
+      const roundResult = rps.getRoundResult(state);
+      const p1Emoji = rps.getChoiceEmoji(roundResult.p1Choice);
+      const p2Emoji = rps.getChoiceEmoji(roundResult.p2Choice);
+      
+      let roundText = "";
+      if (roundResult.winner) {
+        const winnerName = roundResult.winner === state.player1Id ? player1Name : player2Name;
+        roundText = `${p1Emoji} vs ${p2Emoji}\n**${winnerName}** wins this round!`;
+      } else {
+        roundText = `${p1Emoji} vs ${p2Emoji}\nIt's a tie!`;
+      }
+      
+      const matchResult = rps.isMatchOver(state);
+      if (matchResult.over && matchResult.winner) {
+        const winnerId = matchResult.winner;
+        const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
+        const winnerName = await getPlayerName(winnerId);
+        const loserName = await getPlayerName(loserId);
+        
+        const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "rps", winnerName, loserName);
+        const eloText = eloAffected ? ` (+${winnerChange})` : "";
+        const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
+        clearLeaderboardCache("rps");
+        
+        clearGameTimer(game.id);
+        await storage.endGame(game.id);
+        
+        const buttons = [ui.createRPSButtons(game.id, true), ui.createRematchButton("rps", state.player1Id, state.player2Id)];
+        const content = `**ROCK PAPER SCISSORS**\n\n${player1Name} vs ${player2Name}\n\n${roundText}\n\nFinal Score: **${state.player1Wins}** - **${state.player2Wins}**\n\n🎉 **${winnerName}** wins the match!${eloText}${noEloNote}`;
+        
+        await interaction.deferUpdate();
+        await syncGameMessages(game, content, buttons);
+        return;
+      }
+      
+      rps.resetRound(state);
+      await storage.updateGameState(game.id, state);
+      
+      const buttons = [ui.createRPSButtons(game.id)];
+      const content = `**ROCK PAPER SCISSORS**\n\n${player1Name} vs ${player2Name}\n\n${roundText}\n\nScore: **${state.player1Wins}** - **${state.player2Wins}**\nRound ${state.currentRound}\n\nChoose your weapon!`;
+      
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
+    } else {
+      await storage.updateGameState(game.id, state);
+      
+      const p1Status = state.player1Choice ? "✅" : "⏳";
+      const p2Status = state.player2Choice ? "✅" : "⏳";
+      
+      const buttons = [ui.createRPSButtons(game.id)];
+      const content = `**ROCK PAPER SCISSORS**\n\n${player1Name} ${p1Status} vs ${p2Status} ${player2Name}\n\nScore: **${state.player1Wins}** - **${state.player2Wins}**\nBest of 3\n\nChoose your weapon!`;
+      
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
+    }
+  }
+  
+  else if (customId.startsWith("hm_")) {
+    const parts = customId.split("_");
+    const gameId = parts[1];
+    const letter = parts[2];
+    
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    const state = game.state as any;
+    
+    if (userId !== state.playerId) {
+      await interaction.reply({ content: "This isn't your game!", ephemeral: true });
+      return;
+    }
+    
+    const result = hangman.guessLetter(state, letter);
+    if (result.alreadyGuessed) {
+      await interaction.reply({ content: "You already guessed that letter!", ephemeral: true });
+      return;
+    }
+    
+    await storage.updateGameState(game.id, state);
+    
+    const figure = hangman.getHangmanFigure(state.wrongGuesses);
+    const displayWord = hangman.getDisplayWord(state);
+    const wrongLetters = state.guessedLetters.filter((l: string) => !state.word.includes(l)).join(" ");
+    
+    if (hangman.isGameWon(state)) {
+      await storage.recordGameResult(state.playerId, "hangman", "win");
+      clearLeaderboardCache("hangman");
+      await storage.endGame(game.id);
+      
+      const time = hangman.getCompletionTime(state);
+      const content = `**HANGMAN**\n\n${figure}\n\n**Word:** \`${displayWord}\`\n\n🎉 You won! Time: ${time}s`;
+      
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, []);
+      return;
+    }
+    
+    if (hangman.isGameLost(state)) {
+      await storage.recordGameResult(state.playerId, "hangman", "loss");
+      clearLeaderboardCache("hangman");
+      await storage.endGame(game.id);
+      
+      const content = `**HANGMAN**\n\n${figure}\n\n**Word:** \`${state.word}\`\n\n😔 Game over! The word was: **${state.word}**`;
+      
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, []);
+      return;
+    }
+    
+    const buttons = ui.createHangmanButtons(game.id, state.guessedLetters);
+    const wrongText = wrongLetters ? `\nWrong: ${wrongLetters}` : "";
+    const content = `**HANGMAN**\n\n${figure}\n\n**Word:** \`${displayWord}\`${wrongText}\n\nGuesses left: ${state.maxWrongGuesses - state.wrongGuesses}`;
+    
+    await interaction.deferUpdate();
+    await syncGameMessages(game, content, buttons);
+  }
+  
+  else if (customId.startsWith("td_")) {
+    const parts = customId.split("_");
+    const gameId = parts[1];
+    const answerIndex = parseInt(parts[2]);
+    
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    const state = game.state as any;
+    
+    if (userId !== state.player1Id && userId !== state.player2Id) {
+      await interaction.reply({ content: "You're not in this game!", ephemeral: true });
+      return;
+    }
+    
+    const isPlayer1 = userId === state.player1Id;
+    const alreadyAnswered = isPlayer1 ? state.player1Answered : state.player2Answered;
+    if (alreadyAnswered) {
+      await interaction.reply({ content: "You've already answered!", ephemeral: true });
+      return;
+    }
+    
+    const result = triviaduel.submitAnswer(state, userId, answerIndex);
+    
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
+    
+    if (triviaduel.bothAnswered(state)) {
+      const correctAnswer = state.currentQuestion.answers[state.currentQuestion.correctIndex];
+      let roundText = "";
+      if (state.roundWinner) {
+        const winnerName = state.roundWinner === state.player1Id ? player1Name : player2Name;
+        roundText = `✅ Correct answer: **${correctAnswer}**\n**${winnerName}** got it first!`;
+      } else {
+        roundText = `✅ Correct answer: **${correctAnswer}**\nNeither player got it right!`;
+      }
+      
+      triviaduel.nextRound(state);
+      const matchResult = triviaduel.isMatchOver(state);
+      
+      if (matchResult.over) {
+        let eloText = "";
+        let noEloNote = "";
+        let resultText = "";
+        
+        if (matchResult.winner) {
+          const winnerId = matchResult.winner;
+          const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
+          const winnerName = await getPlayerName(winnerId);
+          const loserName = await getPlayerName(loserId);
+          
+          const eloResult = await storage.recordPvPResult(winnerId, loserId, "triviaduel", winnerName, loserName);
+          eloText = eloResult.eloAffected ? ` (+${eloResult.winnerChange})` : "";
+          noEloNote = !eloResult.eloAffected ? `\n\n*No rating change - you've played ${eloResult.dailyGamesCount} games together today (max 3 for rating)*` : "";
+          clearLeaderboardCache("triviaduel");
+          resultText = `🎉 **${winnerName}** wins!${eloText}`;
+        } else {
+          resultText = "It's a draw!";
+        }
+        
+        clearGameTimer(game.id);
+        await storage.endGame(game.id);
+        
+        const buttons = ui.createTriviaDuelButtons(game.id, state.currentQuestion?.answers || [], true);
+        buttons.push(ui.createRematchButton("triviaduel", state.player1Id, state.player2Id));
+        const content = `**TRIVIA DUEL**\n\n${player1Name} vs ${player2Name}\n\n${roundText}\n\nFinal Score: **${state.player1Score}** - **${state.player2Score}**\n\n${resultText}${noEloNote}`;
+        
+        await interaction.deferUpdate();
+        await syncGameMessages(game, content, buttons);
+        return;
+      }
+      
+      triviaduel.getNextQuestion(state);
+      await storage.updateGameState(game.id, state);
+      
+      const buttons = ui.createTriviaDuelButtons(game.id, state.currentQuestion.answers);
+      const content = `**TRIVIA DUEL**\n\n${player1Name} vs ${player2Name}\n\n${roundText}\n\nScore: **${state.player1Score}** - **${state.player2Score}**\n\n📚 *${state.currentQuestion.category}*\n\n**${state.currentQuestion.question}**\n\nRound ${state.currentRound}/${state.maxRounds}`;
+      
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
+      resetGameTimer(game.id, interaction.channel as TextChannel);
+    } else {
+      await storage.updateGameState(game.id, state);
+      
+      const p1Status = state.player1Answered ? "✅" : "⏳";
+      const p2Status = state.player2Answered ? "✅" : "⏳";
+      
+      const buttons = ui.createTriviaDuelButtons(game.id, state.currentQuestion.answers);
+      const content = `**TRIVIA DUEL**\n\n${player1Name} ${p1Status} vs ${p2Status} ${player2Name}\nScore: **${state.player1Score}** - **${state.player2Score}**\n\n📚 *${state.currentQuestion.category}*\n\n**${state.currentQuestion.question}**\n\nRound ${state.currentRound}/${state.maxRounds}`;
+      
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
+    }
+  }
+  
+  else if (customId.startsWith("bs_")) {
+    const parts = customId.split("_");
+    const gameId = parts[1];
+    const position = parseInt(parts[2]);
+    
+    const game = await storage.getActiveGameById(gameId);
+    if (!game) {
+      await interaction.reply({ content: "Game not found.", ephemeral: true });
+      return;
+    }
+    
+    const state = game.state as any;
+    
+    if (userId !== state.player1Id && userId !== state.player2Id) {
+      await interaction.reply({ content: "You're not in this game!", ephemeral: true });
+      return;
+    }
+    
+    if (userId !== state.currentTurn) {
+      await interaction.reply({ content: "It's not your turn!", ephemeral: true });
+      return;
+    }
+    
+    const result = battleship.fireShot(state, userId, position);
+    if (!result.valid) {
+      await interaction.reply({ content: "Invalid shot!", ephemeral: true });
+      return;
+    }
+    
+    await storage.updateGameState(game.id, state, state.currentTurn);
+    
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
+    
+    const gameResult = battleship.isGameOver(state);
+    if (gameResult.over && gameResult.winner) {
+      const winnerId = gameResult.winner;
+      const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
+      const winnerName = await getPlayerName(winnerId);
+      const loserName = await getPlayerName(loserId);
+      
+      const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "battleship", winnerName, loserName);
+      const eloText = eloAffected ? ` (+${winnerChange})` : "";
+      const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
+      clearLeaderboardCache("battleship");
+      
+      clearGameTimer(game.id);
+      await storage.endGame(game.id);
+      
+      const shooterBoard = userId === state.player1Id ? state.player1Board : state.player2Board;
+      const buttons = ui.createBattleshipButtons(game.id, shooterBoard, true);
+      buttons.push(ui.createRematchButton("battleship", state.player1Id, state.player2Id));
+      const content = `**BATTLESHIP**\n\n${player1Name} vs ${player2Name}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}`;
+      
+      await interaction.deferUpdate();
+      await syncGameMessages(game, content, buttons);
+      return;
+    }
+    
+    const hitText = result.hit ? (result.sunk ? "💥 HIT AND SUNK!" : "💥 HIT!") : "💨 Miss!";
+    const currentPlayerName = await getPlayerName(state.currentTurn);
+    const shooterBoard = state.currentTurn === state.player1Id ? state.player1Board : state.player2Board;
+    const buttons = ui.createBattleshipButtons(game.id, shooterBoard);
+    
+    const myShipsLeft = (state.currentTurn === state.player1Id ? state.player1Board : state.player2Board).ships.filter((s: any) => s.hits.length < s.positions.length).length;
+    const theirShipsLeft = (state.currentTurn === state.player1Id ? state.player2Board : state.player1Board).ships.filter((s: any) => s.hits.length < s.positions.length).length;
+    
+    const content = `**BATTLESHIP**\n\n${player1Name} vs ${player2Name}\n\n${hitText}\n\nYour ships: ${myShipsLeft}/2 | Enemy ships: ${theirShipsLeft}/2\n\n**${currentPlayerName}**'s turn! Type a coordinate (e.g., A1, B3) or click a button.`;
+    
+    await interaction.deferUpdate();
+    await syncGameMessages(game, content, buttons);
+    resetGameTimer(game.id, interaction.channel as TextChannel);
   }
 }
 
@@ -2021,6 +2462,10 @@ async function handleTextGameInput(message: Message) {
         if (state.gameOver) {
           const result = state.won ? "win" : "loss";
           await storage.recordGameResult(state.playerId, "wordle", result);
+          if (state.won && state.endTime) {
+            const completionTime = Math.floor((state.endTime - state.startTime) / 1000);
+            await storage.recordWordleWin(state.playerId, completionTime);
+          }
           clearLeaderboardCache("wordle");
           await storage.endGame(game.id);
         }
@@ -2057,6 +2502,130 @@ async function handleTextGameInput(message: Message) {
         await message.reply(result.error || "Invalid guess.");
       }
     }
+  }
+  
+  else if (game.gameType === "mathblitz") {
+    const numAnswer = parseInt(content);
+    if (isNaN(numAnswer)) return;
+    
+    if (playerId !== state.player1Id && playerId !== state.player2Id) return;
+    
+    const result = mathblitz.submitAnswer(state, playerId, numAnswer);
+    
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
+    const playerName = await getPlayerName(playerId);
+    
+    if (result.correct && result.firstCorrect) {
+      await message.channel.send(`✅ **${playerName}** got it! The answer was **${state.currentProblem?.answer}**`);
+    } else if (result.correct) {
+      await message.channel.send(`✅ **${playerName}** also got it right!`);
+    }
+    
+    if (mathblitz.bothAnswered(state) || result.firstCorrect) {
+      mathblitz.nextRound(state);
+      const matchResult = mathblitz.isMatchOver(state);
+      
+      if (matchResult.over) {
+        let eloText = "";
+        let noEloNote = "";
+        let resultText = "";
+        
+        if (matchResult.winner) {
+          const winnerId = matchResult.winner;
+          const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
+          const winnerName = await getPlayerName(winnerId);
+          const loserName = await getPlayerName(loserId);
+          
+          const eloResult = await storage.recordPvPResult(winnerId, loserId, "mathblitz", winnerName, loserName);
+          eloText = eloResult.eloAffected ? ` (+${eloResult.winnerChange})` : "";
+          noEloNote = !eloResult.eloAffected ? `\n\n*No rating change - you've played ${eloResult.dailyGamesCount} games together today (max 3 for rating)*` : "";
+          clearLeaderboardCache("mathblitz");
+          resultText = `🎉 **${winnerName}** wins!${eloText}`;
+        } else {
+          resultText = "It's a draw!";
+        }
+        
+        clearGameTimer(game.id);
+        await storage.endGame(game.id);
+        
+        const rematchBtn = ui.createRematchButton("mathblitz", state.player1Id, state.player2Id);
+        await sendToGameChannels(game, {
+          content: `**MATH BLITZ**\n\n${player1Name} vs ${player2Name}\n\nFinal Score: **${state.player1Score}** - **${state.player2Score}**\n\n${resultText}${noEloNote}`,
+          components: [rematchBtn]
+        });
+        return;
+      }
+      
+      mathblitz.getNextProblem(state);
+      await storage.updateGameState(game.id, state);
+      
+      const p1Status = state.player1Answered ? "✅" : "⏳";
+      const p2Status = state.player2Answered ? "✅" : "⏳";
+      
+      await sendToGameChannels(game, {
+        content: `**MATH BLITZ**\n\n${player1Name} ${p1Status} vs ${p2Status} ${player2Name}\nScore: **${state.player1Score}** - **${state.player2Score}**\n\n🧮 **${state.currentProblem?.question} = ?**\n\nType your answer!\n\nRound ${state.currentRound}/${state.maxRounds}`
+      });
+      resetGameTimer(game.id, message.channel as TextChannel);
+    } else {
+      await storage.updateGameState(game.id, state);
+    }
+  }
+  
+  else if (game.gameType === "battleship") {
+    const coordMatch = content.toUpperCase().match(/^([A-E])([1-5])$/);
+    if (!coordMatch) return;
+    
+    if (playerId !== state.currentTurn) return;
+    
+    const col = coordMatch[1].charCodeAt(0) - 65;
+    const row = parseInt(coordMatch[2]) - 1;
+    const position = row * 5 + col;
+    
+    const result = battleship.fireShot(state, playerId, position);
+    if (!result.valid) return;
+    
+    await storage.updateGameState(game.id, state, state.currentTurn);
+    
+    const player1Name = await getPlayerName(state.player1Id);
+    const player2Name = await getPlayerName(state.player2Id);
+    
+    const gameResult = battleship.isGameOver(state);
+    if (gameResult.over && gameResult.winner) {
+      const winnerId = gameResult.winner;
+      const loserId = winnerId === state.player1Id ? state.player2Id : state.player1Id;
+      const winnerName = await getPlayerName(winnerId);
+      const loserName = await getPlayerName(loserId);
+      
+      const { winnerChange, eloAffected, dailyGamesCount } = await storage.recordPvPResult(winnerId, loserId, "battleship", winnerName, loserName);
+      const eloText = eloAffected ? ` (+${winnerChange})` : "";
+      const noEloNote = !eloAffected ? `\n\n*No rating change - you've played ${dailyGamesCount} games together today (max 3 for rating)*` : "";
+      clearLeaderboardCache("battleship");
+      
+      clearGameTimer(game.id);
+      await storage.endGame(game.id);
+      
+      const shooterBoard = playerId === state.player1Id ? state.player1Board : state.player2Board;
+      const buttons = ui.createBattleshipButtons(game.id, shooterBoard, true);
+      buttons.push(ui.createRematchButton("battleship", state.player1Id, state.player2Id));
+      const msgContent = `**BATTLESHIP**\n\n${player1Name} vs ${player2Name}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}`;
+      
+      await syncGameMessages(game, msgContent, buttons);
+      return;
+    }
+    
+    const hitText = result.hit ? (result.sunk ? "💥 HIT AND SUNK!" : "💥 HIT!") : "💨 Miss!";
+    const currentPlayerName = await getPlayerName(state.currentTurn);
+    const shooterBoard = state.currentTurn === state.player1Id ? state.player1Board : state.player2Board;
+    const buttons = ui.createBattleshipButtons(game.id, shooterBoard);
+    
+    const myShipsLeft = (state.currentTurn === state.player1Id ? state.player1Board : state.player2Board).ships.filter((s: any) => s.hits.length < s.positions.length).length;
+    const theirShipsLeft = (state.currentTurn === state.player1Id ? state.player2Board : state.player1Board).ships.filter((s: any) => s.hits.length < s.positions.length).length;
+    
+    const msgContent = `**BATTLESHIP**\n\n${player1Name} vs ${player2Name}\n\n${hitText}\n\nYour ships: ${myShipsLeft}/2 | Enemy ships: ${theirShipsLeft}/2\n\n**${currentPlayerName}**'s turn! Type a coordinate (e.g., A1, B3) or click a button.`;
+    
+    await syncGameMessages(game, msgContent, buttons);
+    resetGameTimer(game.id, message.channel as TextChannel);
   }
 }
 
@@ -2347,6 +2916,26 @@ client.on(Events.MessageCreate, async (message: Message) => {
         case "wordle":
         case "w":
           await handleSoloGame(message, "wordle");
+          break;
+        case "rps":
+        case "rockpaperscissors":
+          await handleGameCommand(message, "rps", args);
+          break;
+        case "hangman":
+        case "hm":
+          await handleSoloGame(message, "hangman");
+          break;
+        case "trivia":
+        case "td":
+          await handleGameCommand(message, "triviaduel", args);
+          break;
+        case "math":
+        case "mb":
+          await handleGameCommand(message, "mathblitz", args);
+          break;
+        case "battleship":
+        case "bs":
+          await handleGameCommand(message, "battleship", args);
           break;
         case "quit":
         case "q":
