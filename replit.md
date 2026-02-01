@@ -4,17 +4,22 @@ A competitive multiplayer gaming Discord bot with global leaderboards and a cosm
 
 ## Overview
 
-Playground offers competitive PvP and solo games with interactive button-based UI, coin economy, and cosmetic customization.
+Playground offers 9 competitive games with interactive button-based UI, Elo ranking system, and cosmetic customization.
 
 ## Games
 
-### PvP Ranked Games
+### PvP Ranked Games (Elo System)
 - **Connect 4** - Classic 4-in-a-row game (30s per turn)
 - **Tic Tac Toe** - Single game ranked matches
 - **Word Duel** - 5 scrambled words, first to unscramble wins point
+- **Rock Paper Scissors** - Best of 3 rounds
+- **Trivia Duel** - 5 trivia questions, first correct answer wins round
+- **Math Blitz** - 5 math problems, first correct answer wins round
+- **Battleship** - 5x5 grid, find and sink opponent's ships
 
 ### Solo Leaderboard Games
-- **Wordle** - 6 attempts to guess 5-letter word
+- **Wordle** - 6 attempts to guess 5-letter word (tracks fastest time)
+- **Hangman** - Guess the word before running out of lives
 
 ## Commands
 
@@ -22,9 +27,13 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - `,connect4` / `,c4` - Queue for Connect 4 or challenge @user
 - `,c4 play` - Instantly start Connect 4 vs Play bot (unranked)
 - `,tictactoe` / `,ttt` - Queue for Tic Tac Toe or challenge @user
-- `,ttt play` - Instantly start Tic Tac Toe vs Play bot (unranked)
 - `,wordduel` / `,wd` - Queue for Word Duel or challenge @user
 - `,wordle` / `,w` - Start solo Wordle
+- `,rps` - Queue for Rock Paper Scissors or challenge @user
+- `,hangman` / `,hm` - Start solo Hangman
+- `,trivia` / `,td` - Queue for Trivia Duel or challenge @user
+- `,math` / `,mb` - Queue for Math Blitz or challenge @user
+- `,battleship` / `,bs` - Queue for Battleship or challenge @user
 
 ### Gameplay Commands
 - `,quit` / `,q` - Forfeit current game or leave queue
@@ -32,12 +41,16 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - **Connect 4** - Type 1-7 or click buttons to drop pieces, Q button to quit
 - **Tic Tac Toe** - Click buttons to play
 - **Wordle & Word Duel** - Type your answers
+- **RPS** - Click Rock, Paper, or Scissors buttons
+- **Hangman** - Click letter buttons to guess
+- **Trivia/Math** - Type or click your answer
+- **Battleship** - Click grid buttons to fire
 
 ### Profile & Stats
 - `,profile` / `,p` - View your profile
 - `,profile @user` - View someone's profile
 - `,leaderboard <game>` / `,lb <game>` - View game leaderboard
-- Leaderboard shortcuts: `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`
+- Leaderboard shortcuts: `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb hm`, `,lb td`, `,lb mb`, `,lb bs`
 
 ### Shop (Coming Soon)
 - `,shop` - Preview cosmetic shop
@@ -77,7 +90,7 @@ Playground offers competitive PvP and solo games with interactive button-based U
 
 ## Ranking System
 
-### PvP Games (Connect 4, Tic Tac Toe, Word Duel)
+### PvP Games (All except Wordle and Hangman)
 - **Elo Rating System** - Start at 1000, adjust based on opponent's rating
 - Beat stronger opponents = gain more points
 - **Minimum 5 games** required to appear on leaderboard
@@ -85,8 +98,9 @@ Playground offers competitive PvP and solo games with interactive button-based U
 - Rating change shown after each match (+N ⭐)
 - **Anti-farming**: After 3 games/day vs same opponent, no Elo change (games still count)
 
-### Solo Games (Wordle)
-- Leaderboards sorted by total wins
+### Solo Games (Wordle, Hangman)
+- Wordle: Sorted by wins, then fastest completion time
+- Hangman: Sorted by wins
 
 ### Leaderboard Display
 ```
@@ -117,11 +131,19 @@ RECENT MATCHES
 ```
 src/
 ├── index.ts          # Main bot entry point
+├── bot.ts            # Bot logic and command handling
 ├── games/
 │   ├── connect4.ts   # Connect 4 game logic
 │   ├── tictactoe.ts  # Tic Tac Toe game logic
 │   ├── wordduel.ts   # Word Duel game logic
-│   └── wordle.ts     # Wordle game logic
+│   ├── wordle.ts     # Wordle game logic
+│   ├── rps.ts        # Rock Paper Scissors game logic
+│   ├── hangman.ts    # Hangman game logic
+│   ├── triviaduel.ts # Trivia Duel game logic
+│   ├── mathblitz.ts  # Math Blitz game logic
+│   └── battleship.ts # Battleship game logic
+├── data/
+│   └── wordlist.ts   # Word lists for word games
 shared/
 └── schema.ts         # Database schema (Drizzle ORM)
 server/
@@ -132,7 +154,7 @@ server/
 ## Database Schema
 
 - **players** - User profiles, coins, equipped cosmetics
-- **gameStats** - Per-game statistics and rankings
+- **gameStats** - Per-game statistics, Elo ratings, and extra stats (like best time)
 - **activeGames** - Persistent game state
 - **matchHistory** - PvP match records with Elo changes
 - **shopItems** - Cosmetic items for sale (coming soon)
@@ -169,10 +191,18 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
+- **5 New Games Added**:
+  - Rock Paper Scissors (PvP best of 3)
+  - Hangman (solo word guessing)
+  - Trivia Duel (PvP 5 questions)
+  - Math Blitz (PvP 5 math problems)
+  - Battleship (PvP 5x5 grid)
+- **Wordle Fastest Time** - Tracks and displays best completion time on leaderboard
+- **Bot Games Limited** - Play bot now only available for Connect 4 (removed from Tic Tac Toe)
+- **New Leaderboard Shortcuts** - Added `,lb hm`, `,lb td`, `,lb mb`, `,lb bs`
 - **Expert Bot AI** - Bot opponent Play now uses advanced AI algorithms:
-  - **Tic Tac Toe**: Full minimax algorithm - unbeatable, plays perfectly every game
   - **Connect 4**: Minimax with alpha-beta pruning (8 moves lookahead) - extremely difficult to beat
-- **Bot Opponent "Play"** - After 45 seconds in queue with no match, automatically starts unranked game vs Play 🤖 (Connect 4 and Tic Tac Toe)
+- **Bot Opponent "Play"** - After 45 seconds in queue with no match, automatically starts unranked game vs Play 🤖 (Connect 4 only)
 - **Play's Profile** - Play has its own profile with 🤖 Bot badge, tracks wins/losses but no Elo rating
 - **Rematch Fix** - Fixed rematch button so challenges can be accepted in the same server
 - **Chip Colors** - Connect 4 now shows 🔴 Player1 vs 🟡 Player2 next to names
@@ -187,7 +217,6 @@ This bot is configured as a **Reserved VM** deployment:
 - **Direct Challenges Same-Server Only** - Direct @user challenges must be accepted in the same server
 - **Match Found Notification** - Cross-server queue matches now notify both player channels
 - **Coin Rewards Disabled** - Coin awards temporarily disabled until shop is ready
-- **Minesweeper Removed** - Game removed from bot
 - **Shop Disabled** - Coming soon with unique cosmetic items
 - **Daily Streak Counter** - Tracks consecutive days of play, displayed on profile
 - **Wordle Keyboard** - Shows used letters with grouped status format after each guess
