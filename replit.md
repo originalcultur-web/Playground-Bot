@@ -4,7 +4,7 @@ A competitive multiplayer gaming Discord bot with global leaderboards and a cosm
 
 ## Overview
 
-Playground offers 10 competitive games with interactive button-based UI, Elo ranking system, and cosmetic customization.
+Playground offers 9 competitive games with interactive button-based UI, Elo ranking system, and cosmetic customization.
 
 ## Games
 
@@ -15,7 +15,6 @@ Playground offers 10 competitive games with interactive button-based UI, Elo ran
 - **Rock Paper Scissors** - Best of 3 rounds
 - **Trivia Duel** - 5 trivia questions, first correct answer wins round
 - **Math Blitz** - 5 math problems, first correct answer wins round
-- **Word Chain** - Take turns typing words starting with last letter of previous word (15s per turn)
 
 ### Solo Leaderboard Games
 - **Wordle** - 6 attempts to guess 5-letter word (tracks fastest time)
@@ -33,7 +32,6 @@ Playground offers 10 competitive games with interactive button-based UI, Elo ran
 - `,rps` - Queue for Rock Paper Scissors or challenge @user
 - `,trivia` / `,td` - Queue for Trivia Duel or challenge @user
 - `,math` / `,mb` - Queue for Math Blitz or challenge @user
-- `,wordchain` / `,wc` - Queue for Word Chain or challenge @user
 - `,memorymatch` / `,mm` - Start solo Memory Match
 - `,numberguess` / `,ng` - Start solo Number Guess
 
@@ -45,7 +43,6 @@ Playground offers 10 competitive games with interactive button-based UI, Elo ran
 - **Wordle & Word Duel** - Type your answers
 - **RPS** - Click Rock, Paper, or Scissors buttons
 - **Trivia/Math** - Type or click your answer
-- **Word Chain** - Type words starting with last letter of previous word
 - **Memory Match** - Click cards to flip and find matching pairs
 - **Number Guess** - Type numbers to guess the secret number
 
@@ -53,7 +50,7 @@ Playground offers 10 competitive games with interactive button-based UI, Elo ran
 - `,profile` / `,p` - View your profile
 - `,profile @user` - View someone's profile
 - `,leaderboard <game>` / `,lb <game>` - View game leaderboard
-- Leaderboard shortcuts: `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb td`, `,lb mb`, `,lb wc`
+- Leaderboard shortcuts: `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb td`, `,lb mb`
 
 ### Shop (Coming Soon)
 - `,shop` - Preview cosmetic shop
@@ -196,14 +193,13 @@ This bot is configured as a **Reserved VM** deployment:
 ## Recent Changes
 
 - **Game Roster Update**:
-  - Added Word Chain (PvP - take turns typing words starting with last letter)
   - Added Memory Match (Solo - find matching pairs with hidden cards)
   - Added Number Guess (Solo - guess secret number 1-100 with hints)
-  - Removed Battleship and Hangman
-- **Current Games**: Connect 4, Tic Tac Toe, Word Duel, Wordle, RPS, Trivia Duel, Math Blitz, Word Chain, Memory Match, Number Guess (10 total)
+  - Removed Battleship, Hangman, and Word Chain
+- **Current Games**: Connect 4, Tic Tac Toe, Word Duel, Wordle, RPS, Trivia Duel, Math Blitz, Memory Match, Number Guess (9 total)
 - **Wordle Fastest Time** - Tracks and displays best completion time on leaderboard
 - **Bot Games Limited** - Play bot now only available for Connect 4
-- **Leaderboard Shortcuts** - `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb td`, `,lb mb`, `,lb wc`
+- **Leaderboard Shortcuts** - `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb td`, `,lb mb`
 - **Expert Bot AI** - Bot opponent Play now uses advanced AI algorithms:
   - **Connect 4**: Minimax with alpha-beta pruning (8 moves lookahead) - extremely difficult to beat
 - **Bot Opponent "Play"** - After 45 seconds in queue with no match, automatically starts unranked game vs Play 🤖 (Connect 4 only)

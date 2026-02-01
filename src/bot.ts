@@ -16,7 +16,6 @@ import * as wordle from "./games/wordle.js";
 import * as rps from "./games/rps.js";
 import * as triviaduel from "./games/triviaduel.js";
 import * as mathblitz from "./games/mathblitz.js";
-import * as wordchain from "./games/wordchain.js";
 import * as memorymatch from "./games/memorymatch.js";
 import * as numberguess from "./games/numberguess.js";
 import * as ui from "./ui/gameComponents.js";
@@ -1085,15 +1084,6 @@ async function handleRules(message: Message, args: string[]) {
 - First to 3 wins the match
 - Ranked game with Elo rating`,
     
-    wordchain: `**Word Chain Rules**
-- Take turns typing words
-- Each word must start with the last letter of the previous word
-- Words cannot be repeated
-- 15 seconds per turn
-- Invalid words or timeout = lose
-- Uses common English words dictionary
-- Ranked game with Elo rating`,
-    
     memorymatch: `**Memory Match Rules**
 - Click cards to reveal the hidden emoji
 - Find all matching pairs to win
@@ -1110,7 +1100,7 @@ async function handleRules(message: Message, args: string[]) {
   };
   
   if (!game || !rules[game]) {
-    await message.channel.send(`Usage: \`,rules <game>\`\nGames: connect4, tictactoe, wordduel, wordle, rps, triviaduel, mathblitz, wordchain, memorymatch, numberguess`);
+    await message.channel.send(`Usage: \`,rules <game>\`\nGames: connect4, tictactoe, wordduel, wordle, rps, triviaduel, mathblitz, memorymatch, numberguess`);
     return;
   }
   
@@ -1225,14 +1215,6 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
       state = mathblitz.createGameState(player1Id, player2Id);
       mathblitz.getNextProblem(state);
       break;
-    case "wordchain":
-      state = wordchain.initWordChainGame(
-        player1Id, player2Id,
-        player1Name, player2Name,
-        queueEntry1.channelId, queueEntry2.channelId,
-        queueEntry1.guildId || undefined, queueEntry2.guildId || undefined
-      );
-      break;
     default:
       return;
   }
@@ -1265,10 +1247,6 @@ async function startPvPGame(player1Channel: TextChannel, gameType: string, playe
     content = `**TRIVIA DUEL**\n\n${player1Name} ⏳ vs ⏳ ${player2Name}\nScore: **0** - **0**\n\n📚 *${state.currentQuestion.category}*\n\n**${state.currentQuestion.question}**\n\nRound 1/${state.maxRounds}`;
   } else if (gameType === "mathblitz") {
     content = `**MATH BLITZ**\n\n${player1Name} ⏳ vs ⏳ ${player2Name}\nScore: **0** - **0**\n\n🧮 **${state.currentProblem.question} = ?**\n\nType your answer!\n\nRound 1/${state.maxRounds}`;
-  } else if (gameType === "wordchain") {
-    buttons = wordchain.createWordChainButtons(game.id);
-    const requiredLetter = state.lastWord[state.lastWord.length - 1].toUpperCase();
-    content = `**🔗 WORD CHAIN**\n\n${player1Name} vs ${player2Name}\n\nStarting word: **${state.lastWord.toUpperCase()}**\n\n${player1Name}, type a word starting with **${requiredLetter}**!\n\nChain: ${state.lastWord}`;
   }
   
   const noButtonGames = ["wordduel", "mathblitz"];
@@ -2286,42 +2264,16 @@ async function handleButtonInteraction(interaction: ButtonInteraction) {
       return;
     }
     
-    if (customId.startsWith("wc_quit_") && userId !== state.player1Id && userId !== state.player2Id) {
-      await interaction.reply({ content: "This isn't your game!", ephemeral: true });
-      return;
-    }
-    
     clearGameTimer(game.id);
     await storage.endGame(game.id);
     
     await interaction.deferUpdate();
     
-    if (customId.startsWith("ng_quit_")) {
-      const embed = numberguess.createNumberGuessEmbed(state, undefined, true, false);
-      await interaction.message.edit({
-        embeds: [embed],
-        components: []
-      });
-    } else {
-      const forfeiterId = userId;
-      const winnerId = forfeiterId === state.player1Id ? state.player2Id : state.player1Id;
-      const winnerName = await getPlayerName(winnerId);
-      const player1Name = await getPlayerName(state.player1Id);
-      const player2Name = await getPlayerName(state.player2Id);
-      const forfeiterName = await getPlayerName(forfeiterId);
-      
-      const eloResult = await storage.recordPvPResult(winnerId, forfeiterId, "wordchain", winnerName, forfeiterName);
-      const eloText = eloResult.eloAffected ? ` (+${eloResult.winnerChange})` : "";
-      clearLeaderboardCache("wordchain");
-      
-      const recentWords = state.usedWords.slice(-10).join(" → ");
-      const rematchBtn = ui.createRematchButton("wordchain", state.player1Id, state.player2Id);
-      
-      await sendToGameChannels(game, {
-        content: `**🔗 WORD CHAIN**\n\n${player1Name} vs ${player2Name}\n\n${forfeiterName} forfeited!\n\n🎉 **${winnerName}** wins!${eloText}\n\nChain: ${recentWords}`,
-        components: [rematchBtn]
-      });
-    }
+    const embed = numberguess.createNumberGuessEmbed(state, undefined, true, false);
+    await interaction.message.edit({
+      embeds: [embed],
+      components: []
+    });
   }
   
 }
@@ -2654,57 +2606,6 @@ async function handleTextGameInput(message: Message) {
     }
   }
   
-  else if (game.gameType === "wordchain") {
-    if (playerId !== state.player1Id && playerId !== state.player2Id) return;
-    
-    const result = wordchain.processWordChainMove(state, playerId, content);
-    
-    const player1Name = await getPlayerName(state.player1Id);
-    const player2Name = await getPlayerName(state.player2Id);
-    const playerName = await getPlayerName(playerId);
-    
-    if (result.gameOver) {
-      let eloText = "";
-      let noEloNote = "";
-      
-      if (result.winner && result.loser) {
-        const winnerName = await getPlayerName(result.winner);
-        const loserName = await getPlayerName(result.loser);
-        const eloResult = await storage.recordPvPResult(result.winner, result.loser, "wordchain", winnerName, loserName);
-        eloText = eloResult.eloAffected ? ` (+${eloResult.winnerChange})` : "";
-        noEloNote = !eloResult.eloAffected ? `\n\n*No rating change - you've played ${eloResult.dailyGamesCount} games together today (max 3 for rating)*` : "";
-        clearLeaderboardCache("wordchain");
-      }
-      
-      clearGameTimer(game.id);
-      await storage.endGame(game.id);
-      
-      const winnerName = result.winner ? await getPlayerName(result.winner) : null;
-      const recentWords = state.usedWords.slice(-10).join(" → ");
-      const rematchBtn = ui.createRematchButton("wordchain", state.player1Id, state.player2Id);
-      
-      await sendToGameChannels(game, {
-        content: `**🔗 WORD CHAIN**\n\n${player1Name} vs ${player2Name}\n\n${result.reason}\n\n🎉 **${winnerName}** wins!${eloText}${noEloNote}\n\nChain: ${recentWords}`,
-        components: [rematchBtn]
-      });
-      return;
-    }
-    
-    if (result.valid) {
-      await storage.updateGameState(game.id, state);
-      
-      const currentPlayerName = state.currentTurn === state.player1Id ? player1Name : player2Name;
-      const requiredLetter = state.lastWord[state.lastWord.length - 1].toUpperCase();
-      const recentWords = state.usedWords.slice(-5).join(" → ");
-      
-      const buttons = wordchain.createWordChainButtons(game.id);
-      await sendToGameChannels(game, {
-        content: `**🔗 WORD CHAIN**\n\n${player1Name} vs ${player2Name}\n\n✅ **${playerName}** played: **${state.lastWord.toUpperCase()}**\n\n${currentPlayerName}, type a word starting with **${requiredLetter}**!\n\nChain: ${recentWords}`,
-        components: buttons
-      });
-      resetGameTimer(game.id, message.channel as TextChannel);
-    }
-  }
   
 }
 
@@ -3007,10 +2908,6 @@ client.on(Events.MessageCreate, async (message: Message) => {
         case "math":
         case "mb":
           await handleGameCommand(message, "mathblitz", args);
-          break;
-        case "wordchain":
-        case "wc":
-          await handleGameCommand(message, "wordchain", args);
           break;
         case "memorymatch":
         case "mm":
