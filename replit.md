@@ -196,7 +196,7 @@ This bot is configured as a **Reserved VM** deployment:
 - **Win Emojis** - 🎉 emoji added to all win announcements
 - **Match History** - Profile shows last 5 matches with opponent, result, and Elo change
 - **Rematch Button** - PvP games now show a rematch button after game ends
-- **Word Lists** - 5,000 unique 5-letter words for Wordle and Word Duel
+- **Word Lists** - 3,074 common everyday 5-letter words for Wordle and Word Duel (curated for ages 13-30)
 - **Wordle Key Guide** - Fixed guide to correctly show ⬛ (black) for letters not in word
 - **Elo Rating System** - PvP games use Elo-based ranking with rating changes after matches
 - Cross-server matchmaking - players from different servers can be matched via queue
