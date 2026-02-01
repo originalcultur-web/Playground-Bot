@@ -302,7 +302,7 @@ export async function recordGameResult(
   return coinsEarned;
 }
 
-const PVP_GAMES = ["tictactoe", "connect4", "wordduel", "rps", "triviaduel", "mathblitz"];
+const PVP_GAMES = ["tictactoe", "connect4", "wordduel", "rps", "triviaduel", "mathblitz", "wordchain"];
 
 const BOT_PLAYER_ID = "BOT_PLAY_123456789";
 

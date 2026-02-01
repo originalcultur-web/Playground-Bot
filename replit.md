@@ -4,7 +4,7 @@ A competitive multiplayer gaming Discord bot with global leaderboards and a cosm
 
 ## Overview
 
-Playground offers 9 competitive games with interactive button-based UI, Elo ranking system, and cosmetic customization.
+Playground offers 10 competitive games with interactive button-based UI, Elo ranking system, and cosmetic customization.
 
 ## Games
 
@@ -15,11 +15,12 @@ Playground offers 9 competitive games with interactive button-based UI, Elo rank
 - **Rock Paper Scissors** - Best of 3 rounds
 - **Trivia Duel** - 5 trivia questions, first correct answer wins round
 - **Math Blitz** - 5 math problems, first correct answer wins round
-- **Battleship** - 5x5 grid, find and sink opponent's ships
+- **Word Chain** - Take turns typing words starting with last letter of previous word (15s per turn)
 
 ### Solo Leaderboard Games
 - **Wordle** - 6 attempts to guess 5-letter word (tracks fastest time)
-- **Hangman** - Guess the word before running out of lives
+- **Memory Match** - Find matching pairs by clicking hidden cards
+- **Number Guess** - Guess the secret number 1-100 with higher/lower hints (7 guesses)
 
 ## Commands
 
@@ -30,10 +31,11 @@ Playground offers 9 competitive games with interactive button-based UI, Elo rank
 - `,wordduel` / `,wd` - Queue for Word Duel or challenge @user
 - `,wordle` / `,w` - Start solo Wordle
 - `,rps` - Queue for Rock Paper Scissors or challenge @user
-- `,hangman` / `,hm` - Start solo Hangman
 - `,trivia` / `,td` - Queue for Trivia Duel or challenge @user
 - `,math` / `,mb` - Queue for Math Blitz or challenge @user
-- `,battleship` / `,bs` - Queue for Battleship or challenge @user
+- `,wordchain` / `,wc` - Queue for Word Chain or challenge @user
+- `,memorymatch` / `,mm` - Start solo Memory Match
+- `,numberguess` / `,ng` - Start solo Number Guess
 
 ### Gameplay Commands
 - `,quit` / `,q` - Forfeit current game or leave queue
@@ -42,15 +44,16 @@ Playground offers 9 competitive games with interactive button-based UI, Elo rank
 - **Tic Tac Toe** - Click buttons to play
 - **Wordle & Word Duel** - Type your answers
 - **RPS** - Click Rock, Paper, or Scissors buttons
-- **Hangman** - Click letter buttons to guess
 - **Trivia/Math** - Type or click your answer
-- **Battleship** - Click grid buttons to fire
+- **Word Chain** - Type words starting with last letter of previous word
+- **Memory Match** - Click cards to flip and find matching pairs
+- **Number Guess** - Type numbers to guess the secret number
 
 ### Profile & Stats
 - `,profile` / `,p` - View your profile
 - `,profile @user` - View someone's profile
 - `,leaderboard <game>` / `,lb <game>` - View game leaderboard
-- Leaderboard shortcuts: `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb hm`, `,lb td`, `,lb mb`, `,lb bs`
+- Leaderboard shortcuts: `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb td`, `,lb mb`, `,lb wc`
 
 ### Shop (Coming Soon)
 - `,shop` - Preview cosmetic shop
@@ -90,7 +93,7 @@ Playground offers 9 competitive games with interactive button-based UI, Elo rank
 
 ## Ranking System
 
-### PvP Games (All except Wordle and Hangman)
+### PvP Games (All except Wordle, Memory Match, and Number Guess)
 - **Elo Rating System** - Start at 1000, adjust based on opponent's rating
 - Beat stronger opponents = gain more points
 - **Minimum 5 games** required to appear on leaderboard
@@ -138,10 +141,11 @@ src/
 │   ├── wordduel.ts   # Word Duel game logic
 │   ├── wordle.ts     # Wordle game logic
 │   ├── rps.ts        # Rock Paper Scissors game logic
-│   ├── hangman.ts    # Hangman game logic
 │   ├── triviaduel.ts # Trivia Duel game logic
 │   ├── mathblitz.ts  # Math Blitz game logic
-│   └── battleship.ts # Battleship game logic
+│   ├── wordchain.ts  # Word Chain game logic
+│   ├── memorymatch.ts # Memory Match game logic
+│   └── numberguess.ts # Number Guess game logic
 ├── data/
 │   └── wordlist.ts   # Word lists for word games
 shared/
@@ -191,15 +195,15 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
-- **5 New Games Added**:
-  - Rock Paper Scissors (PvP best of 3)
-  - Hangman (solo word guessing)
-  - Trivia Duel (PvP 5 questions)
-  - Math Blitz (PvP 5 math problems)
-  - Battleship (PvP 5x5 grid)
+- **Game Roster Update**:
+  - Added Word Chain (PvP - take turns typing words starting with last letter)
+  - Added Memory Match (Solo - find matching pairs with hidden cards)
+  - Added Number Guess (Solo - guess secret number 1-100 with hints)
+  - Removed Battleship and Hangman
+- **Current Games**: Connect 4, Tic Tac Toe, Word Duel, Wordle, RPS, Trivia Duel, Math Blitz, Word Chain, Memory Match, Number Guess (10 total)
 - **Wordle Fastest Time** - Tracks and displays best completion time on leaderboard
-- **Bot Games Limited** - Play bot now only available for Connect 4 (removed from Tic Tac Toe)
-- **New Leaderboard Shortcuts** - Added `,lb hm`, `,lb td`, `,lb mb`, `,lb bs`
+- **Bot Games Limited** - Play bot now only available for Connect 4
+- **Leaderboard Shortcuts** - `,lb c4`, `,lb ttt`, `,lb wd`, `,lb w`, `,lb td`, `,lb mb`, `,lb wc`
 - **Expert Bot AI** - Bot opponent Play now uses advanced AI algorithms:
   - **Connect 4**: Minimax with alpha-beta pruning (8 moves lookahead) - extremely difficult to beat
 - **Bot Opponent "Play"** - After 45 seconds in queue with no match, automatically starts unranked game vs Play 🤖 (Connect 4 only)
