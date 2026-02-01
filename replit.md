@@ -68,6 +68,8 @@ Playground offers 9 competitive games with interactive button-based UI, Elo rank
 - `,resetemoji <type>` - Reset emoji to default (Owner only)
 
 ### Other Commands
+- `,ping` - Check bot latency (with random quips)
+- `,setprefix <prefix>` - Change bot prefix (server owner/admin only)
 - `,rules <game>` - How to play a specific game
 
 ## Staff System
@@ -192,6 +194,8 @@ This bot is configured as a **Reserved VM** deployment:
 
 ## Recent Changes
 
+- **Ping Command** - Added `,ping` with latency display and random funny quips
+- **Custom Prefix** - Server owners/admins can now use `,setprefix` to change the bot prefix per server
 - **Game Roster Update**:
   - Added Memory Match (Solo - find matching pairs with hidden cards)
   - Added Number Guess (Solo - guess secret number 1-100 with hints)

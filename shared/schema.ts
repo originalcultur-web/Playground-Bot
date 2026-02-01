@@ -122,6 +122,13 @@ export const userInventory = pgTable("user_inventory", {
   purchasedAt: timestamp("purchased_at").defaultNow().notNull(),
 });
 
+export const serverSettings = pgTable("server_settings", {
+  id: serial("id").primaryKey(),
+  guildId: text("guild_id").notNull().unique(),
+  prefix: text("prefix").notNull().default(","),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export type Player = typeof players.$inferSelect;
 export type InsertPlayer = typeof players.$inferInsert;
 export type GameStat = typeof gameStats.$inferSelect;

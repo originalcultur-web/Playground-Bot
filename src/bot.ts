@@ -565,40 +565,101 @@ async function syncGameMessages(game: any, content: string, components?: any[]):
   }
 }
 
+const PING_QUIPS = [
+  "I'm not slow, you're just impatient",
+  "Faster than my will to live",
+  "Still quicker than your dad coming back with the milk",
+  "I blame the government",
+  "My internet runs on hopes and dreams",
+  "Powered by pure spite",
+  "This is what peak performance looks like",
+  "Not great, not terrible",
+  "I've seen better. I've been better.",
+  "We move different",
+  "Honestly? Could be worse",
+  "Living my truth rn",
+  "Ratio + you asked",
+  "No thoughts, just vibes",
+  "This says a lot about society",
+];
+
+async function handlePing(message: Message) {
+  const start = Date.now();
+  const msg = await message.channel.send("Pinging...");
+  const latency = Date.now() - start;
+  const quip = PING_QUIPS[Math.floor(Math.random() * PING_QUIPS.length)];
+  await msg.edit(`**Pong!** ${latency}ms\n*"${quip}"*`);
+}
+
+async function handleSetPrefix(message: Message, args: string[]) {
+  if (!message.guild) {
+    await message.channel.send("This command can only be used in a server.");
+    return;
+  }
+  
+  const member = await message.guild.members.fetch(message.author.id);
+  const isOwner = message.guild.ownerId === message.author.id;
+  const hasAdmin = member.permissions.has("Administrator");
+  
+  if (!isOwner && !hasAdmin) {
+    await message.channel.send("Only the server owner or admins can change the prefix.");
+    return;
+  }
+  
+  const newPrefix = args[0];
+  if (!newPrefix) {
+    const currentPrefix = await storage.getServerPrefix(message.guild.id);
+    await message.channel.send(`Current prefix: \`${currentPrefix}\`\nUsage: \`${currentPrefix}setprefix <new prefix>\``);
+    return;
+  }
+  
+  if (newPrefix.length > 5) {
+    await message.channel.send("Prefix must be 5 characters or less.");
+    return;
+  }
+  
+  await storage.setServerPrefix(message.guild.id, newPrefix);
+  await message.channel.send(`Prefix changed to \`${newPrefix}\``);
+}
+
 async function handleHelp(message: Message) {
   const staffRole = await storage.getStaffRole(message.author.id);
+  const prefix = message.guild 
+    ? await storage.getServerPrefix(message.guild.id)
+    : PREFIX;
   
   let help = `**PLAYGROUND - Commands**
 
 **Games (PvP):**
-\`,connect4\` / \`,c4\` - Play Connect 4
-\`,tictactoe\` / \`,ttt\` - Play Tic Tac Toe
-\`,wordduel\` / \`,wd\` - Play Word Duel
-\`,rps\` - Play Rock Paper Scissors
-\`,trivia\` / \`,td\` - Play Trivia Duel
-\`,math\` / \`,mb\` - Play Math Blitz
+\`${prefix}connect4\` / \`${prefix}c4\` - Play Connect 4
+\`${prefix}tictactoe\` / \`${prefix}ttt\` - Play Tic Tac Toe
+\`${prefix}wordduel\` / \`${prefix}wd\` - Play Word Duel
+\`${prefix}rps\` - Play Rock Paper Scissors
+\`${prefix}trivia\` / \`${prefix}td\` - Play Trivia Duel
+\`${prefix}math\` / \`${prefix}mb\` - Play Math Blitz
 
 **Games (Solo):**
-\`,wordle\` / \`,w\` - Play Wordle
+\`${prefix}wordle\` / \`${prefix}w\` - Play Wordle
+\`${prefix}memorymatch\` / \`${prefix}mm\` - Play Memory Match
+\`${prefix}numberguess\` / \`${prefix}ng\` - Play Number Guess
 
 **During Games:**
-\`,quit\` - Forfeit current game
+\`${prefix}quit\` - Forfeit current game
 
 **Profile & Stats:**
-\`,profile\` - View your profile
-\`,leaderboard <game>\` - View leaderboard
-\`,staff\` - View staff team
-\`,rules <game>\` - How to play a game
+\`${prefix}profile\` - View your profile
+\`${prefix}leaderboard <game>\` - View leaderboard
+\`${prefix}rules <game>\` - How to play a game
 
-**Shop (Coming Soon):**
-\`,shop\` - Preview cosmetic shop
-
-\`,accept\` - Accept a challenge`;
+**Other:**
+\`${prefix}ping\` - Check bot latency
+\`${prefix}staff\` - View staff team
+\`${prefix}accept\` - Accept a challenge`;
 
   if (staffRole) {
     help += `
 
-*Use \`,staffhelp\` for staff commands (only you can see)*`;
+*Use \`${prefix}staffhelp\` for staff commands*`;
   }
   
   await message.channel.send(help);
@@ -2848,8 +2909,12 @@ client.on(Events.MessageCreate, async (message: Message) => {
   
   const content = message.content.trim();
   
-  if (content.startsWith(PREFIX)) {
-    const args = content.slice(PREFIX.length).trim().split(/\s+/);
+  const prefix = message.guild 
+    ? await storage.getServerPrefix(message.guild.id)
+    : PREFIX;
+  
+  if (content.toLowerCase().startsWith(prefix.toLowerCase())) {
+    const args = content.slice(prefix.length).trim().split(/\s+/);
     const command = args.shift()?.toLowerCase();
     
     try {
@@ -2956,6 +3021,12 @@ client.on(Events.MessageCreate, async (message: Message) => {
           break;
         case "resetemoji":
           await handleResetEmoji(message, args);
+          break;
+        case "ping":
+          await handlePing(message);
+          break;
+        case "setprefix":
+          await handleSetPrefix(message, args);
           break;
       }
     } catch (error) {

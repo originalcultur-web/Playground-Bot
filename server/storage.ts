@@ -11,6 +11,7 @@ import {
   shopItems,
   userInventory,
   customEmojis,
+  serverSettings,
   type Player,
   type GameStat,
   type ActiveGame,
@@ -927,4 +928,25 @@ export async function cleanExpiredQueues(maxAgeMinutes: number = 5): Promise<num
   const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
   const result = await db.delete(matchmakingQueue).where(sql`${matchmakingQueue.queuedAt} < ${cutoff}`);
   return result.rowCount || 0;
+}
+
+export async function getServerPrefix(guildId: string): Promise<string> {
+  const settings = await db.query.serverSettings.findFirst({
+    where: eq(serverSettings.guildId, guildId),
+  });
+  return settings?.prefix || ",";
+}
+
+export async function setServerPrefix(guildId: string, prefix: string): Promise<void> {
+  const existing = await db.query.serverSettings.findFirst({
+    where: eq(serverSettings.guildId, guildId),
+  });
+  
+  if (existing) {
+    await db.update(serverSettings)
+      .set({ prefix, updatedAt: new Date() })
+      .where(eq(serverSettings.guildId, guildId));
+  } else {
+    await db.insert(serverSettings).values({ guildId, prefix });
+  }
 }
